@@ -1,11 +1,11 @@
-package com.nenovinite.news;
+package com.nenovinite.news.utils;
 
 import java.io.Serializable;
 import java.util.Comparator;
 
 import scala.Tuple2;
 
-public class WordComparator implements Comparator<Tuple2<String,Tuple2<Integer,Long>>>, Serializable {
+public class WordIndexComparator implements Comparator<Tuple2<String,Tuple2<Integer,Long>>>, Serializable {
 	
 	/**
 	 * 

@@ -30,9 +30,10 @@ public abstract class ModelBase implements Serializable {
 	};
 
 	public void evaluate(JavaRDD<LabeledPoint> test) {
-		JavaRDD<Tuple2<Object, Object>> scoreAndLabels = this.getScoreAndLabels(test);
+		JavaRDD<Tuple2<Object, Object>> scoreAndLabels = this.getScoreAndLabels(test).cache();
 
 		final long testCount = test.count();
 		ModelEvaluation.summary(scoreAndLabels, testCount);
+		scoreAndLabels.unpersist();
 	}
 }

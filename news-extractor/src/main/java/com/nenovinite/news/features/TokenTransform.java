@@ -64,7 +64,7 @@ public class TokenTransform implements Serializable {
 			stream.reset();
 			while (stream.incrementToken()) {
 				String word = stream.addAttribute(CharTermAttribute.class).toString().replaceAll(",", "\\.")
-						.replaceAll("\n|\r", "");
+						.replaceAll("\n|\r", "").replaceAll("br2n", "");
 				String[] words = word.split("\\.");
 				if (words.length == 0 || NumberUtils.isNumber(word)) {
 					words = new String[] { word };

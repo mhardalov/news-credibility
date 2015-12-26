@@ -29,6 +29,7 @@ public class Main {
 	}
 
 	public static void main(String[] args) {
+		boolean verbose = false;
 		SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("Parser news");
 		JavaSparkContext sc = new JavaSparkContext(conf);
 		SQLContext sqlContxt = new SQLContext(sc);
@@ -44,7 +45,7 @@ public class Main {
 				" ", 1.0));
 
 		// Random shuffle
-		newsData = newsData.sort("content").cache();
+		newsData = newsData.sort("content");
 
 		final long allNewsCount = newsData.count();
 
@@ -56,10 +57,14 @@ public class Main {
 		JavaPairRDD<Double, Multiset<String>> testDocs = docs.subtract(trainingDocs);
 
 		TFIDFTransform tfIdf = new TFIDFTransform(allNewsCount);
-		tfIdf.extract(trainingDocs);
+		tfIdf.extract(trainingDocs, verbose);
 
 		JavaRDD<LabeledPoint> training = trainingDocs.map(tfIdf::transform);
+		training.cache();
+
 		JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
+
+		trainingDocs.unpersist();
 
 		ModelBase model = new ModelNaiveBayes(training);
 		model.evaluate(test);

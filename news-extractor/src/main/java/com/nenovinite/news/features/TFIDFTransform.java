@@ -10,6 +10,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.util.StatCounter;
 
 import com.google.common.collect.Multiset;
 
@@ -36,37 +37,60 @@ public class TFIDFTransform implements Serializable {
 		return Math.log(1 + (double) (allNewsCount) / (wordCount));
 	}
 
-	// public void idfInfo(final long allNewsCount, JavaPairRDD<String,
-	// Tuple2<Integer, Long>> idfRdd) {
-	//
-	// idfRdd.map(word -> word._2._1 + "," + word._2._2()).repartition(1)
-	// .saveAsTextFile("/home/momchil/Desktop/master-thesis/datasets/stats/idf.csv");
-	//
-	// StatCounter idfStats = idfRdd.mapToDouble(row ->
-	// TFIDFTransform.calcIDF(allNewsCount, row._2._2)).stats();
-	//
-	// System.out.println(idfStats);
-	// for (Tuple2<String, Tuple2<Integer, Long>> word :
-	// idfRdd.takeOrdered(1000, new WordComparator())) {
-	// System.out.println(word._1() + "," + word._2._1);
-	// }
-	// }
+	public void printIDFInfo(JavaPairRDD<String, Integer> idf) {
+		StatCounter idfStats = idf.mapToDouble(row -> row._2).stats();
+		System.out.println(idfStats);
+	}
 
-	public void extract(JavaPairRDD<Double, Multiset<String>> trainingDocs) {
-		// .filter(word -> word._2 > 6 && word._2 < 1000)
-		JavaPairRDD<String, Integer> idfWords = trainingDocs.flatMap(row -> row._2())
-				.mapToPair(word -> new Tuple2<>(word, 1)).partitionBy(new HashPartitioner(10))
-				.reduceByKey((a, b) -> a + b).cache();
+	private void saveIDFToFile(String path, JavaPairRDD<String, Integer> idf) {
+		idf.map(word -> word._1() + "," + word._2()).repartition(1).saveAsTextFile(path);
+	}
+
+	public void extract(JavaPairRDD<Double, Multiset<String>> trainingDocs, boolean verbose) {
+		// .filter(word -> word._2 > 6 && word._2 < 1000);
+		JavaPairRDD<Double, Multiset<String>> wordsClass0 = trainingDocs.filter(row -> row._1.equals(0.0)).cache();
+		JavaPairRDD<Double, Multiset<String>> wordsClass1 = trainingDocs.subtract(wordsClass0).cache();
+
+		JavaPairRDD<String, Integer> idfClass0 = extractWordCount(wordsClass0).cache();
+		JavaPairRDD<String, Integer> idfClass1 = extractWordCount(wordsClass1).cache();
+
+		JavaPairRDD<String, Integer> idfWords = idfClass0.fullOuterJoin(idfClass1).mapToPair(joined -> {
+			String word = joined._1;
+			Integer left = joined._2()._1().orNull();
+			Integer right = joined._2()._2().orNull();
+
+			if (left != null && right != null) {
+				return null;
+			}
+
+			int count = left != null ? left.intValue() : right.intValue();
+
+			return new Tuple2<>(word, count);
+		}).filter(row -> row != null && row._2() > 6 && row._1().length() > 2).cache();
+
+		if (verbose) {
+			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idf-final.csv", idfWords);
+			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idfClass0.csv", idfClass0);
+			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idfClass1.csv", idfClass1);
+			this.printIDFInfo(idfWords);
+		}
+
+		wordsClass0.unpersist();
+		wordsClass1.unpersist();
+		idfClass0.unpersist();
+		idfClass1.unpersist();
 
 		JavaPairRDD<String, Tuple2<Integer, Long>> idfRdd = idfWords.zipWithIndex()
 				.mapToPair(row -> new Tuple2<>(row._1._1, new Tuple2<>(row._1._2, row._2))).cache();
-
-		// idfInfo(allNewsCount, idfRdd);
-
 		idf = idfRdd.collectAsMap();
 
 		featuresCount = idfRdd.count();
 		idfRdd.unpersist();
+	}
+
+	private JavaPairRDD<String, Integer> extractWordCount(JavaPairRDD<Double, Multiset<String>> wordsClass0) {
+		return wordsClass0.flatMap(row -> row._2()).mapToPair(word -> new Tuple2<>(word, 1))
+				.partitionBy(new HashPartitioner(10)).reduceByKey((a, b) -> a + b);
 	}
 
 	public LabeledPoint transform(Tuple2<Double, Multiset<String>> doc) {
