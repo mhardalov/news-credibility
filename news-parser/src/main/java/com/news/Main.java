@@ -1,7 +1,11 @@
 package com.news;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,13 +16,37 @@ import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
+import org.codehaus.jettison.json.JSONException;
+import org.codehaus.jettison.json.JSONObject;
 
 import com.news.hbase.extract.base.HbaseReaderBase;
 import com.news.hbase.extract.bazikileaks.BazikileaksReader;
 import com.news.hbase.extract.nenovinite.NeNoviniteReader;
 
 public class Main {
-	
+
+	public static void fixNews(String file) throws FileNotFoundException, IOException, JSONException {
+		List<String> lines = new ArrayList<String>();
+		int skipped = 0;
+		try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				try {
+					JSONObject json = new JSONObject(line);
+					lines.add(json.toString());
+				} catch (Exception e) {
+					skipped++;
+				}
+			}
+		}
+
+		System.out.println(skipped);
+		FileWriter writer = new FileWriter(file + "-new");
+		for (String str : lines) {
+			writer.write(str + "\n");
+		}
+		writer.close();
+	}
 
 	public static void main(String[] args) throws IOException {
 		final String serverFQDN = "localhost";
@@ -48,9 +76,9 @@ public class Main {
 				while (resultsIter.hasNext()) {
 
 					Result result = resultsIter.next();
-//					HbaseReaderBase jReader  = new NeNoviniteReader(result);
-					HbaseReaderBase jReader  = new BazikileaksReader(result);
-					
+					// HbaseReaderBase jReader = new NeNoviniteReader(result);
+					HbaseReaderBase jReader = new BazikileaksReader(result);
+
 					jsonStrings.add(jReader.toJSON());
 
 					if (i % 100 == 0) {
