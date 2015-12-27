@@ -34,46 +34,45 @@ public class Main {
 		NewsConfiguration conf = new NewsConfiguration(args);
 
 		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("Parser news");
-		JavaSparkContext sc = new JavaSparkContext(sparkConf);
-		SQLContext sqlContxt = new SQLContext(sc);
+		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
+			SQLContext sqlContxt = new SQLContext(sc);
 
-		DataFrame newsData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
-				" WHERE category = \"Политика\" ", 0.0).cache();
-		final long neNoviniteCount = newsData.count();
+			DataFrame newsData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
+					" WHERE category = \"Политика\" ", 0.0).cache();
+			final long neNoviniteCount = newsData.count();
 
-		// " LIMIT 15000"
-		newsData = newsData.unionAll(getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " ", 1.0));
+			// " LIMIT 15000"
+			newsData = newsData.unionAll(getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " ", 1.0));
 
-		// Random shuffle
-		newsData = newsData.sort("content");
+			// Random shuffle
+			newsData = newsData.sort("content");
 
-		final long allNewsCount = newsData.count();
+			final long allNewsCount = newsData.count();
 
-		JavaPairRDD<Double, Multiset<String>> docs = newsData.javaRDD().mapToPair(TokenTransform::transform).cache();
+			TokenTransform tokenizer = new TokenTransform(conf.isVerbose());
+			JavaPairRDD<Double, Multiset<String>> docs = newsData.javaRDD().mapToPair(tokenizer::transform).cache();
 
-		// Split initial RDD into two... [60% training data, 40% testing data].
-		JavaPairRDD<Double, Multiset<String>> trainingDocs = docs.sample(false, 0.6, 11L);
-		trainingDocs.cache();
-		JavaPairRDD<Double, Multiset<String>> testDocs = docs.subtract(trainingDocs);
+			// Split initial RDD into two... [60% training data, 40% testing data].
+			JavaPairRDD<Double, Multiset<String>> trainingDocs = docs.sample(false, 0.6, 11L);
+			trainingDocs.cache();
+			JavaPairRDD<Double, Multiset<String>> testDocs = docs.subtract(trainingDocs);
 
-		TFIDFTransform tfIdf = new TFIDFTransform(allNewsCount);
-		tfIdf.extract(trainingDocs, conf.isVerbose());
+			TFIDFTransform tfIdf = new TFIDFTransform(allNewsCount, conf.isVerbose());
+			tfIdf.extract(trainingDocs);
 
-		JavaRDD<LabeledPoint> training = trainingDocs.map(tfIdf::transform);
-		training.cache();
+			JavaRDD<LabeledPoint> training = trainingDocs.map(tfIdf::transform);
+			training.cache();
 
-		JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
+			JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
 
-		trainingDocs.unpersist();
+			trainingDocs.unpersist();
 
-		ModelBase model = new ModelNaiveBayes(training);
-		model.evaluate(test);
+			ModelBase model = new ModelNaiveBayes(training);
+			model.evaluate(test);
 
-		System.out.println("Ne!Novite news:" + neNoviniteCount);
-		System.out.println("Dnevnik news:" + (allNewsCount - neNoviniteCount));
-
-		sc.close();
-
+			System.out.println("Ne!Novite news:" + neNoviniteCount);
+			System.out.println("Dnevnik news:" + (allNewsCount - neNoviniteCount));
+		}
 	}
 
 }

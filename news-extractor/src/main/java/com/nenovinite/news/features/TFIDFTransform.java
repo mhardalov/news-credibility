@@ -29,8 +29,15 @@ public class TFIDFTransform implements Serializable {
 
 	private Map<String, Tuple2<Integer, Long>> idf;
 
-	public TFIDFTransform(long allNewsCount) {
+	private boolean verbose;
+
+	public TFIDFTransform(long allNewsCount, boolean verbose) {
 		this.newsCount = allNewsCount;
+		this.setVerbose(verbose);
+	}
+
+	public TFIDFTransform(long allNewsCount) {
+		this(allNewsCount, false);
 	}
 
 	public static double calcIDF(final long allNewsCount, long wordCount) {
@@ -46,7 +53,7 @@ public class TFIDFTransform implements Serializable {
 		idf.map(word -> word._1() + "," + word._2()).repartition(1).saveAsTextFile(path);
 	}
 
-	public void extract(JavaPairRDD<Double, Multiset<String>> trainingDocs, boolean verbose) {
+	public void extract(JavaPairRDD<Double, Multiset<String>> trainingDocs) {
 		// .filter(word -> word._2 > 6 && word._2 < 1000);
 		JavaPairRDD<Double, Multiset<String>> wordsClass0 = trainingDocs.filter(row -> row._1.equals(0.0)).cache();
 		JavaPairRDD<Double, Multiset<String>> wordsClass1 = trainingDocs.subtract(wordsClass0).cache();
@@ -58,17 +65,18 @@ public class TFIDFTransform implements Serializable {
 			String word = joined._1;
 			Integer left = joined._2()._1().orNull();
 			Integer right = joined._2()._2().orNull();
+			int count;
 
 			if (left != null && right != null) {
-				return null;
+				count = left.intValue() + right.intValue();
+			} else {
+				count = left != null ? left.intValue() : right.intValue();
 			}
 
-			int count = left != null ? left.intValue() : right.intValue();
-
 			return new Tuple2<>(word, count);
-		}).filter(row -> row != null && row._2() > 6 && row._1().length() > 2).cache();
+		}).filter(row -> row != null).cache();
 
-		if (verbose) {
+		if (isVerbose()) {
 			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idf-final.csv", idfWords);
 			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idfClass0.csv", idfClass0);
 			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idfClass1.csv", idfClass1);
@@ -125,6 +133,14 @@ public class TFIDFTransform implements Serializable {
 
 	public Map<String, Tuple2<Integer, Long>> getIdf() {
 		return idf;
+	}
+
+	public boolean isVerbose() {
+		return verbose;
+	}
+
+	public void setVerbose(boolean verbose) {
+		this.verbose = verbose;
 	}
 
 }

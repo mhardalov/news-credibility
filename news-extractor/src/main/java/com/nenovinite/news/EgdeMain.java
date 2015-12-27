@@ -1,9 +1,7 @@
-package com.nenovinite.news.features;
+package com.nenovinite.news;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.io.StringReader;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -11,28 +9,23 @@ import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.bg.BulgarianAnalyzer;
 import org.apache.lucene.analysis.bg.BulgarianStemFilter;
+import org.apache.lucene.analysis.core.LetterTokenizer;
 import org.apache.lucene.analysis.core.LowerCaseFilter;
+import org.apache.lucene.analysis.core.LowerCaseTokenizer;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.miscellaneous.LengthFilter;
 import org.apache.lucene.analysis.shingle.ShingleFilter;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.FilteringTokenFilter;
 import org.apache.lucene.util.Attribute;
-import org.apache.spark.sql.Row;
 
-import com.google.common.collect.ConcurrentHashMultiset;
-import com.google.common.collect.Multiset;
-
-import scala.Tuple2;
-
-public class TokenTransform implements Serializable {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 4437649223110687193L;
+public class EgdeMain {
 
 	public static final CharArraySet BULGARIAN_STOP_WORDS_SET;
-
-	private boolean verbose;
 
 	static {
 		final List<String> stopWords = Arrays.asList("а", "автентичен", "аз", "ако", "ала", "бе", "без", "беше", "би",
@@ -62,48 +55,28 @@ public class TokenTransform implements Serializable {
 		BULGARIAN_STOP_WORDS_SET = CharArraySet.unmodifiableSet(stopSet);
 	}
 
-	public TokenTransform(boolean verbose) {
-		this.setVerbose(verbose);
-	}
+	public static void main(String[] args) throws IOException {
+		StringReader input = new StringReader(
+				"Правя тест на класификатор и после др.Дулитъл, ще се оправя с данните! които,са много зле. Но това е по-добре. Но24"
+						.replaceAll("br2n", ""));
 
-	public TokenTransform() {
-		this(false);
-	}
+		LetterTokenizer tokenizer = new LetterTokenizer();
+		tokenizer.setReader(input);
 
-	public Tuple2<Double, Multiset<String>> transform(Row row) throws IOException {
-		Double label = row.getDouble(1);
-		StringReader document = new StringReader(row.getString(0));
-		List<String> wordsList = new ArrayList<>();
+		TokenFilter stopFilter = new StopFilter(tokenizer, BULGARIAN_STOP_WORDS_SET);
+		TokenFilter length = new LengthFilter(stopFilter, 3, 1000);
+		TokenFilter stemmer = new BulgarianStemFilter(length);
+		TokenFilter ngrams = new ShingleFilter(stemmer, 2, 2);
 
-		try (BulgarianAnalyzer analyzer = new BulgarianAnalyzer(BULGARIAN_STOP_WORDS_SET)) {
-			TokenStream stream = analyzer.tokenStream("words", document);
+		try (TokenFilter filter = ngrams) {
 
-			TokenFilter lowerFilter = new LowerCaseFilter(stream);
-			TokenFilter length = new LengthFilter(lowerFilter, 3, 1000);
-			TokenFilter stemmer = new BulgarianStemFilter(length);
-			TokenFilter ngrams = new ShingleFilter(stemmer, 2, 2);
-
-			try (TokenFilter filter = ngrams) {
-				Attribute termAtt = filter.addAttribute(CharTermAttribute.class);
-				filter.reset();
-				while (filter.incrementToken()) {
-					String word = termAtt.toString().replaceAll(",", "\\.").replaceAll("\n|\r", "");
-					wordsList.add(word);
-				}
+			Attribute termAtt = filter.addAttribute(CharTermAttribute.class);
+			filter.reset();
+			while (filter.incrementToken()) {
+				String word = termAtt.toString().replaceAll(",", "\\.").replaceAll("\n|\r", "");
+				System.out.println(word);
 			}
 		}
-
-		Multiset<String> words = ConcurrentHashMultiset.create(wordsList);
-
-		return new Tuple2<>(label, words);
-	}
-
-	public boolean isVerbose() {
-		return verbose;
-	}
-
-	public void setVerbose(boolean verbose) {
-		this.verbose = verbose;
 	}
 
 }
