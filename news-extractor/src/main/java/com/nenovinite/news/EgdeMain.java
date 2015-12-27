@@ -5,6 +5,7 @@ import java.io.StringReader;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.bg.BulgarianAnalyzer;
@@ -56,8 +57,16 @@ public class EgdeMain {
 	}
 
 	public static void main(String[] args) throws IOException {
+		System.out.println(NumberUtils.isDigits("12345"));
+		System.out.println(NumberUtils.isDigits("12345.1"));
+		System.out.println(NumberUtils.isDigits("12345,2"));
+		
+		System.out.println(NumberUtils.isNumber("12345"));
+		System.out.println(NumberUtils.isNumber("12345.1"));
+		System.out.println(NumberUtils.isNumber("12345,2".replace(",", ".")));
+		System.out.println(NumberUtils.isNumber("12345,2"));
 		StringReader input = new StringReader(
-				"Правя тест на класификатор и после др.Дулитъл, ще се оправя с данните! които,са много зле. Но това е по-добре. Но24"
+				"Правя тест на класификатор и после др.Дулитъл, пада.br2n ще се оправя с данните! които,са много зле. Но това е по-добре. Но24"
 						.replaceAll("br2n", ""));
 
 		LetterTokenizer tokenizer = new LetterTokenizer();

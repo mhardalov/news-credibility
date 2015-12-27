@@ -1,6 +1,9 @@
 package com.nenovinite.news;
 
+import java.util.Map;
+
 import org.apache.commons.cli.ParseException;
+import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -15,6 +18,9 @@ import com.nenovinite.news.features.TFIDFTransform;
 import com.nenovinite.news.features.TokenTransform;
 import com.nenovinite.news.models.ModelBase;
 import com.nenovinite.news.models.ModelNaiveBayes;
+import com.nenovinite.news.models.ModelSVM;
+
+import scala.Tuple2;
 
 public class Main {
 
@@ -37,41 +43,61 @@ public class Main {
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
 
-			DataFrame newsData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
-					" WHERE category = \"Политика\" ", 0.0).cache();
-			final long neNoviniteCount = newsData.count();
+			long seed = 11l;
+			double[] weights = new double[] { 0.6, 0.4 };
+
+			// Split initial RDD into two... [60% training data, 40% testing
+			// data].
+			DataFrame[] unreliableData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
+					" WHERE category = \"Политика\" ", 0.0).randomSplit(weights, seed);
 
 			// " LIMIT 15000"
-			newsData = newsData.unionAll(getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " ", 1.0));
-
-			// Random shuffle
-			newsData = newsData.sort("content");
-
-			final long allNewsCount = newsData.count();
+			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " ", 1.0)
+					.randomSplit(weights, seed);
 
 			TokenTransform tokenizer = new TokenTransform(conf.isVerbose());
-			JavaPairRDD<Double, Multiset<String>> docs = newsData.javaRDD().mapToPair(tokenizer::transform).cache();
 
-			// Split initial RDD into two... [60% training data, 40% testing data].
-			JavaPairRDD<Double, Multiset<String>> trainingDocs = docs.sample(false, 0.6, 11L);
+			// Random shuffle by sort by content
+			JavaPairRDD<Double, Multiset<String>> trainingDocs = unreliableData[0].unionAll(credibleData[0])
+					.sort("content").javaRDD().mapToPair(tokenizer::transform).cache();
 			trainingDocs.cache();
-			JavaPairRDD<Double, Multiset<String>> testDocs = docs.subtract(trainingDocs);
 
-			TFIDFTransform tfIdf = new TFIDFTransform(allNewsCount, conf.isVerbose());
+			JavaPairRDD<Double, Multiset<String>> testDocs = unreliableData[1].unionAll(credibleData[1]).sort("content")
+					.javaRDD().mapToPair(tokenizer::transform);
+			testDocs.cache();
+
+			long trainingCount = trainingDocs.count();
+
+			TFIDFTransform tfIdf = new TFIDFTransform(trainingCount, conf.isVerbose());
 			tfIdf.extract(trainingDocs);
 
 			JavaRDD<LabeledPoint> training = trainingDocs.map(tfIdf::transform);
 			training.cache();
-
-			JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
-
 			trainingDocs.unpersist();
 
-			ModelBase model = new ModelNaiveBayes(training);
-			model.evaluate(test);
+			JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
+			test.cache();
+			testDocs.unpersist();
 
-			System.out.println("Ne!Novite news:" + neNoviniteCount);
-			System.out.println("Dnevnik news:" + (allNewsCount - neNoviniteCount));
+			ModelBase model = new ModelSVM(training);//new ModelNaiveBayes(training);
+			training.unpersist();
+
+			test.cache();
+			Map<Double, Integer> classCount = testDocs.mapToPair(row -> new Tuple2<Double, Integer>(row._1, 1))
+					.reduceByKey((a, b) -> a + b).collectAsMap();
+
+			Accumulator<Integer> counterFor0 = sc.accumulator(0);
+			Accumulator<Integer> corrcetFor0 = sc.accumulator(0);
+			model.evaluate(test, counterFor0, corrcetFor0);
+
+			System.out.println("Classified as Ne!Novinite: " + counterFor0.value());
+			System.out.println("Correct Ne!Novinite: " + corrcetFor0.value());
+			System.out.println("Features count:" + tfIdf.getFeaturesCount());
+
+			System.out.println("Ne!Novite news:" + classCount.get(0));
+			System.out.println("Dnevnik news:" + classCount.get(1));
+
+			test.unpersist();
 		}
 	}
 

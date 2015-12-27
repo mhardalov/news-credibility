@@ -56,7 +56,7 @@ public class TFIDFTransform implements Serializable {
 	public void extract(JavaPairRDD<Double, Multiset<String>> trainingDocs) {
 		// .filter(word -> word._2 > 6 && word._2 < 1000);
 		JavaPairRDD<Double, Multiset<String>> wordsClass0 = trainingDocs.filter(row -> row._1.equals(0.0)).cache();
-		JavaPairRDD<Double, Multiset<String>> wordsClass1 = trainingDocs.subtract(wordsClass0).cache();
+		JavaPairRDD<Double, Multiset<String>> wordsClass1 = trainingDocs.filter(row -> row._1.equals(1.0)).cache();
 
 		JavaPairRDD<String, Integer> idfClass0 = extractWordCount(wordsClass0).cache();
 		JavaPairRDD<String, Integer> idfClass1 = extractWordCount(wordsClass1).cache();
@@ -74,7 +74,7 @@ public class TFIDFTransform implements Serializable {
 			}
 
 			return new Tuple2<>(word, count);
-		}).filter(row -> row != null).cache();
+		}).partitionBy(new HashPartitioner(100)).filter(word -> word._2 > 10).cache();
 
 		if (isVerbose()) {
 			this.saveIDFToFile("/home/momchil/Desktop/master-thesis/datasets/stats/idf-final.csv", idfWords);
@@ -89,11 +89,11 @@ public class TFIDFTransform implements Serializable {
 		idfClass1.unpersist();
 
 		JavaPairRDD<String, Tuple2<Integer, Long>> idfRdd = idfWords.zipWithIndex()
-				.mapToPair(row -> new Tuple2<>(row._1._1, new Tuple2<>(row._1._2, row._2))).cache();
+				.mapToPair(row -> new Tuple2<>(row._1._1, new Tuple2<>(row._1._2, row._2)));
 		idf = idfRdd.collectAsMap();
+		idfWords.unpersist();
 
-		featuresCount = idfRdd.count();
-		idfRdd.unpersist();
+		featuresCount = idf.size();
 	}
 
 	private JavaPairRDD<String, Integer> extractWordCount(JavaPairRDD<Double, Multiset<String>> wordsClass0) {

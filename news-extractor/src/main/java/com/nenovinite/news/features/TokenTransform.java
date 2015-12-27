@@ -21,6 +21,7 @@ import org.apache.spark.sql.Row;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
+import com.nenovinite.news.features.filters.NumberFilter;
 
 import scala.Tuple2;
 
@@ -72,14 +73,15 @@ public class TokenTransform implements Serializable {
 
 	public Tuple2<Double, Multiset<String>> transform(Row row) throws IOException {
 		Double label = row.getDouble(1);
-		StringReader document = new StringReader(row.getString(0));
+		StringReader document = new StringReader(row.getString(0).replaceAll("br2n", ""));
 		List<String> wordsList = new ArrayList<>();
 
 		try (BulgarianAnalyzer analyzer = new BulgarianAnalyzer(BULGARIAN_STOP_WORDS_SET)) {
 			TokenStream stream = analyzer.tokenStream("words", document);
 
 			TokenFilter lowerFilter = new LowerCaseFilter(stream);
-			TokenFilter length = new LengthFilter(lowerFilter, 3, 1000);
+			TokenFilter numbers = new NumberFilter(lowerFilter);
+			TokenFilter length = new LengthFilter(numbers, 3, 1000);
 			TokenFilter stemmer = new BulgarianStemFilter(length);
 			TokenFilter ngrams = new ShingleFilter(stemmer, 2, 2);
 
@@ -87,7 +89,10 @@ public class TokenTransform implements Serializable {
 				Attribute termAtt = filter.addAttribute(CharTermAttribute.class);
 				filter.reset();
 				while (filter.incrementToken()) {
-					String word = termAtt.toString().replaceAll(",", "\\.").replaceAll("\n|\r", "");
+					String word = termAtt.toString().replace(",", "(comma)").replaceAll("\n|\r", "");
+					if (word.contains("_")) {
+						continue;
+					}
 					wordsList.add(word);
 				}
 			}
