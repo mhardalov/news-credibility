@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.spark.HashPartitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.mllib.linalg.Vector;
@@ -30,6 +31,8 @@ public class TFIDFTransform implements Serializable {
 	private Map<String, Tuple2<Integer, Long>> idf;
 
 	private boolean verbose;
+
+	private static final DefaultSimilarity sim = new DefaultSimilarity();
 
 	public TFIDFTransform(long allNewsCount, boolean verbose) {
 		this.newsCount = allNewsCount;
@@ -111,7 +114,10 @@ public class TFIDFTransform implements Serializable {
 			Tuple2<Integer, Long> wordInfo = idf.get(word);
 			if (wordInfo != null) {
 				int index = wordInfo._2().intValue();
-				double tfidf = calcTFIDF(tf, wordInfo);
+				int numDocs = (int) this.newsCount;
+				int df = wordInfo._2().intValue();
+
+				double tfidf = this.calculate(tf, df, numDocs);
 
 				vector.add(new Tuple2<>(index, tfidf));
 			}
@@ -121,10 +127,8 @@ public class TFIDFTransform implements Serializable {
 		return new LabeledPoint(label, features);
 	}
 
-	private double calcTFIDF(int tf, Tuple2<Integer, Long> wordInfo) {
-		double idfScore = calcIDF(this.newsCount, (wordInfo._2()));
-		double tfidf = tf * idfScore;
-		return tfidf;
+	public double calculate(int tf, int df, int numDocs) {
+		return sim.tf(tf) * sim.idf(df, numDocs);
 	}
 
 	public long getFeaturesCount() {

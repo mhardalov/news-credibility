@@ -6,6 +6,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.mllib.feature.Normalizer;
+import org.apache.spark.mllib.feature.StandardScaler;
+import org.apache.spark.mllib.feature.StandardScalerModel;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
@@ -68,8 +71,11 @@ public class Main {
 			JavaRDD<LabeledPoint> training = trainingDocs.map(tfIdf::transform);
 			training.cache();
 			trainingDocs.unpersist();
+			StandardScalerModel scaler = new StandardScaler().fit(training.map(row -> row.features()).rdd());
+			training = training.map(row -> new LabeledPoint(row.label(), scaler.transform(row.features())));
 
 			JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
+			test = test.map(row -> new LabeledPoint(row.label(), scaler.transform(row.features())));
 			test.cache();
 			testDocs.unpersist();
 
