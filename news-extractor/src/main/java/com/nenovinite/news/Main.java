@@ -46,7 +46,7 @@ public class Main {
 					" WHERE category = \"Политика\" ", 0.0).randomSplit(weights, seed);
 
 			// " LIMIT 15000"
-			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " LIMIT 1189",
+			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " LIMIT 35000",
 					1.0).randomSplit(weights, seed);
 
 			TokenTransform tokenizer = new TokenTransform(conf.isVerbose());

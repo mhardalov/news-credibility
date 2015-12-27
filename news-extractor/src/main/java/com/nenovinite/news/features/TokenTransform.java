@@ -83,7 +83,7 @@ public class TokenTransform implements Serializable {
 			TokenFilter numbers = new NumberFilter(lowerFilter);
 			TokenFilter length = new LengthFilter(numbers, 3, 1000);
 			TokenFilter stemmer = new BulgarianStemFilter(length);
-			TokenFilter ngrams = new ShingleFilter(stemmer, 2, 2);
+			TokenFilter ngrams = new ShingleFilter(stemmer, 2, 3);
 
 			try (TokenFilter filter = ngrams) {
 				Attribute termAtt = filter.addAttribute(CharTermAttribute.class);
