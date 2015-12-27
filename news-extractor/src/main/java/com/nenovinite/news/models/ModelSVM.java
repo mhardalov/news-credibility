@@ -20,15 +20,16 @@ public class ModelSVM extends ModelBase {
 		super();
 
 		SVMWithSGD svmAlg = new SVMWithSGD();
-		svmAlg.optimizer().setNumIterations(200).setRegParam(0.1).setUpdater(new L1Updater());
+		svmAlg.optimizer().setNumIterations(100).setRegParam(0.1).setUpdater(new L1Updater());
 		model = svmAlg.run(training.rdd());
 
 		// Clear the default threshold.
-		model.clearThreshold();
+//		model.clearThreshold();
+//		model.setThreshold(0.001338428);
 	}
 
 	@Override
 	public double getPreciction(Vector features) {
-		return 0;
+		return model.predict(features);
 	}
 }

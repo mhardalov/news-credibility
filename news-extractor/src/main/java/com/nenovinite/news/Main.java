@@ -1,7 +1,5 @@
 package com.nenovinite.news;
 
-import java.util.Map;
-
 import org.apache.commons.cli.ParseException;
 import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
@@ -17,10 +15,6 @@ import com.nenovinite.news.configuration.NewsConfiguration;
 import com.nenovinite.news.features.TFIDFTransform;
 import com.nenovinite.news.features.TokenTransform;
 import com.nenovinite.news.models.ModelBase;
-import com.nenovinite.news.models.ModelNaiveBayes;
-import com.nenovinite.news.models.ModelSVM;
-
-import scala.Tuple2;
 
 public class Main {
 
@@ -52,8 +46,8 @@ public class Main {
 					" WHERE category = \"Политика\" ", 0.0).randomSplit(weights, seed);
 
 			// " LIMIT 15000"
-			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " ", 1.0)
-					.randomSplit(weights, seed);
+			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " LIMIT 1189",
+					1.0).randomSplit(weights, seed);
 
 			TokenTransform tokenizer = new TokenTransform(conf.isVerbose());
 
@@ -79,25 +73,27 @@ public class Main {
 			test.cache();
 			testDocs.unpersist();
 
-			ModelBase model = new ModelSVM(training);//new ModelNaiveBayes(training);
+			ModelBase model = conf.getModel(training);
 			training.unpersist();
 
 			test.cache();
-			Map<Double, Integer> classCount = testDocs.mapToPair(row -> new Tuple2<Double, Integer>(row._1, 1))
-					.reduceByKey((a, b) -> a + b).collectAsMap();
+
+			long unreliableCount = testDocs.filter(row -> row._1 == 0).count();
+			long credibleCount = testDocs.filter(row -> row._1 == 1).count();
 
 			Accumulator<Integer> counterFor0 = sc.accumulator(0);
 			Accumulator<Integer> corrcetFor0 = sc.accumulator(0);
-			model.evaluate(test, counterFor0, corrcetFor0);
+			String output = model.evaluate(test, counterFor0, corrcetFor0);
 
+			test.unpersist();
+
+			System.out.println(output);
 			System.out.println("Classified as Ne!Novinite: " + counterFor0.value());
 			System.out.println("Correct Ne!Novinite: " + corrcetFor0.value());
 			System.out.println("Features count:" + tfIdf.getFeaturesCount());
 
-			System.out.println("Ne!Novite news:" + classCount.get(0));
-			System.out.println("Dnevnik news:" + classCount.get(1));
-
-			test.unpersist();
+			System.out.println("Ne!Novite news:" + unreliableCount);
+			System.out.println("Dnevnik news:" + credibleCount);
 		}
 	}
 

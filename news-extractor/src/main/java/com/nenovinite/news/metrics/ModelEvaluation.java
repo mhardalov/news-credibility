@@ -2,6 +2,7 @@ package com.nenovinite.news.metrics;
 
 import java.util.List;
 
+import org.apache.commons.lang3.text.StrBuilder;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics;
 
@@ -12,7 +13,8 @@ public class ModelEvaluation {
 		
 	}
 	
-	public static void summary(JavaRDD<Tuple2<Object, Object>> scoreAndLabels, final long testCount) {
+	public static String summary(JavaRDD<Tuple2<Object, Object>> scoreAndLabels, final long testCount) {
+		StrBuilder sb = new StrBuilder();
 		// Get evaluation metrics.
 		BinaryClassificationMetrics metrics = new BinaryClassificationMetrics(JavaRDD.toRDD(scoreAndLabels));
 		long correct = scoreAndLabels.filter(pl -> pl._1().equals(pl._2())).count();
@@ -45,16 +47,19 @@ public class ModelEvaluation {
 		// ROC Curve
 		List<Tuple2<Object, Object>> roc = metrics.roc().toJavaRDD().collect();
 
-		System.out.println("ROC curve: " + roc);
-		System.out.println("Precision by threshold: " + precision);
-		System.out.println("Recall by threshold: " + recall);
-		System.out.println("F1 Score by threshold: " + f1Score);
-		System.out.println("F2 Score by threshold: " + f2Score);
-		System.out.println("Precision-recall curve: " + prc);
-		System.out.println("Thresholds: " + thresholds);
-		System.out.println("Area under precision-recall curve = " + areaUnderPR);
-		System.out.println("Area under ROC = " + areaUnderROC);
-		System.out.println("Accuracy: " + accuracy * 100);
+		
+		sb.appendln("ROC curve: " + roc);
+		sb.appendln("Precision by threshold: " + precision);
+		sb.appendln("Recall by threshold: " + recall);
+		sb.appendln("F1 Score by threshold: " + f1Score);
+		sb.appendln("F2 Score by threshold: " + f2Score);
+		sb.appendln("Precision-recall curve: " + prc);
+		sb.appendln("Thresholds: " + thresholds);
+		sb.appendln("Area under precision-recall curve = " + areaUnderPR);
+		sb.appendln("Area under ROC = " + areaUnderROC);
+		sb.appendln("Accuracy: " + accuracy * 100);
+		
+		return sb.toString();
 	}
 
 }

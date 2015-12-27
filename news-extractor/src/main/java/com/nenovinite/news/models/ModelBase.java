@@ -20,30 +20,35 @@ public abstract class ModelBase implements Serializable {
 
 	public abstract double getPreciction(Vector features);
 
-	public JavaRDD<Tuple2<Object, Object>> getScoreAndLabels(JavaRDD<LabeledPoint> test,
-			Accumulator<Integer> counterFor0, Accumulator<Integer> corrcetFor0) {
+	public JavaRDD<Tuple2<Object, Object>> getScoreAndLabels(JavaRDD<LabeledPoint> test) {
 		// Compute raw scores on the test set.
 		JavaRDD<Tuple2<Object, Object>> scoreAndLabels = test.map(p -> {
 			Double score = this.getPreciction(p.features());
-			if (score == 0.0) {
-				counterFor0.add(1);
-				if (score == p.label()) {
-					corrcetFor0.add(1);
-				}
-			}
 
 			return new Tuple2<Object, Object>(score, p.label());
 		});
+		
 
 		return scoreAndLabels;
 	};
 
-	public void evaluate(JavaRDD<LabeledPoint> test, Accumulator<Integer> counterFor0,
+	public String evaluate(JavaRDD<LabeledPoint> test, Accumulator<Integer> counterFor0,
 			Accumulator<Integer> corrcetFor0) {
-		JavaRDD<Tuple2<Object, Object>> scoreAndLabels = this.getScoreAndLabels(test, counterFor0, corrcetFor0).cache();
+		JavaRDD<Tuple2<Object, Object>> scoreAndLabels = this.getScoreAndLabels(test).cache();
+		scoreAndLabels.foreach(row -> {
+			Double score = (Double) row._1();
+			Double label = (Double) row._2();
+			if (score == 0.0) {
+				counterFor0.add(1);
+				if (score.equals(label)) {
+					corrcetFor0.add(1);
+				}
+			}
+		});
 
 		final long testCount = test.count();
-		ModelEvaluation.summary(scoreAndLabels, testCount);
 		scoreAndLabels.unpersist();
+		String output = ModelEvaluation.summary(scoreAndLabels, testCount);
+		return output;
 	}
 }
