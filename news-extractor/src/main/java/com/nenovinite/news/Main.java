@@ -6,9 +6,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.mllib.feature.Normalizer;
 import org.apache.spark.mllib.feature.StandardScaler;
 import org.apache.spark.mllib.feature.StandardScalerModel;
+import org.apache.spark.mllib.feature.Word2VecModel;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
@@ -39,17 +39,19 @@ public class Main {
 		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("Parser news");
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
+			Word2VecModel fit = Word2VecModel.load(sc.sc(),
+					"/home/momchil/Desktop/master-thesis/w2v/model/wikipedia/bg");
 
 			long seed = 11l;
 			double[] weights = new double[] { 0.6, 0.4 };
 
 			// Split initial RDD into two... [60% training data, 40% testing
 			// data].
-			DataFrame[] unreliableData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
+			DataFrame[] unreliableData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "title",
 					" WHERE category = \"Политика\" ", 0.0).randomSplit(weights, seed);
 
 			// " LIMIT 15000"
-			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", " LIMIT 35000",
+			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "Title", " LIMIT 35000",
 					1.0).randomSplit(weights, seed);
 
 			TokenTransform tokenizer = new TokenTransform(conf.isVerbose());
