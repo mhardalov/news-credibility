@@ -160,7 +160,7 @@ public class Main {
 			// this grid will have 3 x 2 = 6 parameter settings for CrossValidator to choose from.
 			ParamMap[] paramGrid = new ParamGridBuilder()
 					// 100, 1000
-			    .addGrid(hashingTF.numFeatures(), new int[]{10})
+			    .addGrid(hashingTF.numFeatures(), new int[]{10, 100})
 			    .addGrid(lr.regParam(), new double[]{0.1, 0.01})
 			    .build();
 
