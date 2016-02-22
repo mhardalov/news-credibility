@@ -3,11 +3,11 @@ package com.nenovinite.news;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
 import org.apache.commons.cli.ParseException;
+import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
@@ -19,16 +19,19 @@ import org.apache.spark.ml.feature.HashingTF;
 import org.apache.spark.ml.feature.IDF;
 import org.apache.spark.ml.feature.NGram;
 import org.apache.spark.ml.feature.RegexTokenizer;
-import org.apache.spark.ml.feature.SQLTransformer;
 import org.apache.spark.ml.feature.StopWordsRemover;
 import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.ml.param.ParamMap;
 import org.apache.spark.ml.tuning.CrossValidator;
 import org.apache.spark.ml.tuning.CrossValidatorModel;
 import org.apache.spark.ml.tuning.ParamGridBuilder;
+import org.apache.spark.ml.util.MetadataUtils;
+import org.apache.spark.mllib.evaluation.MulticlassMetrics;
+import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
 
@@ -105,25 +108,13 @@ public class Main {
 			DataFrame train = unreliableData[0].unionAll(credibleData[0]).orderBy("content").cache();
 			DataFrame test = unreliableData[1].unionAll(credibleData[1]).orderBy("content").cache();			
 			
-			
-			RegexTokenizer tokenizer = new RegexTokenizer()
-					  .setInputCol("content")
-					  .setOutputCol("tokens")
-					  .setPattern("[\\s!,.?;'\"]+")
-					  .setGaps(false);
-			
-			train = tokenizer.transform(train);
-			
-			TokenFeaturesExtractor tokenFeatures = new TokenFeaturesExtractor()
-					.setInputCol(tokenizer.getOutputCol())
-					.setOutputCol("tokenfeatures");
-			train = tokenFeatures.transform(train);
-			train.show();
+			String tokenizerOutputCol = "tokens";
+			train = getCommonFeatures(train, tokenizerOutputCol);
 
 			StopWordsRemover remover = new StopWordsRemover()
 					.setCaseSensitive(false)
 					.setStopWords(STOP_WORDS.toArray(new String[STOP_WORDS.size()]))
-					.setInputCol(tokenizer.getOutputCol())
+					.setInputCol(tokenizerOutputCol)
 					.setOutputCol("filtered");
 			
 			NGram ngramTransformer = new NGram()
@@ -143,7 +134,7 @@ public class Main {
 					.setMinDocFreq(10);
 			
 			VectorAssembler assembler = new VectorAssembler()
-					  .setInputCols(new String[]{idf.getOutputCol(), tokenFeatures.getOutputCol()})
+					  .setInputCols(new String[]{idf.getOutputCol()})
 					  .setOutputCol("features");
 			
 			LogisticRegression lr = new LogisticRegression()
@@ -153,6 +144,8 @@ public class Main {
 			Pipeline pipeline = new Pipeline()
 					  .setStages(new PipelineStage[] {remover, ngramTransformer, hashingTF, idf, assembler, lr});
 						
+//			Test Error = 0.028165007112375573
+//			Test Error = 0.030915125651967745
 //			PipelineModel model = pipeline.fit(unreliableData[0]);
 			
 			// We use a ParamGridBuilder to construct a grid of parameters to search over.
@@ -160,7 +153,7 @@ public class Main {
 			// this grid will have 3 x 2 = 6 parameter settings for CrossValidator to choose from.
 			ParamMap[] paramGrid = new ParamGridBuilder()
 					// 100, 1000
-			    .addGrid(hashingTF.numFeatures(), new int[]{10, 100})
+			    .addGrid(hashingTF.numFeatures(), new int[]{10, 100, 2000})
 			    .addGrid(lr.regParam(), new double[]{0.1, 0.01})
 			    .build();
 
@@ -178,6 +171,8 @@ public class Main {
 			// Run cross-validation, and choose the best set of parameters.
 			CrossValidatorModel cvModel = cv.fit(train);
 			
+			test = getCommonFeatures(test, tokenizerOutputCol);
+			
 			// Make predictions on test documents. cvModel uses the best model found (lrModel).
 			DataFrame predictions = cvModel.transform(test);
 			// Select example rows to display.
@@ -189,56 +184,31 @@ public class Main {
 			  .setPredictionCol("prediction")
 			  .setMetricName("precision");
 			double accuracy = evaluator.evaluate(predictions);
-			System.out.println("Test Error = " + (1.0 - accuracy));
 			
-//			unreliableData[0] = model.transform(unreliableData[0]);
+			
+			// obtain metrics
+			MulticlassMetrics metrics = new MulticlassMetrics(predictions);
+			StructField predictionColSchema = predictions.schema().apply("prediction");
+			Integer numClasses = (Integer) MetadataUtils.getNumClasses(predictionColSchema).get();
 
-//			unreliableData[0].javaRDD().mapToPair(v1 -> {
-//				String text = v1.getString(0).replace("\n", " ").replace("\r", " ").replace("br2n", " ").replace("'", "\"");
-//				Double label = v1.getDouble(1);
-//				List<String> words = new ArrayList<>(Arrays.asList(text.split(" ")));
-//				words.removeAll(Arrays.asList("", null, " "));
-//				words.removeAll(STOP_WORDS);
-//
-//				return new Tuple2<>(label, words);
-//			}).flatMapValues(words -> words).mapToPair(row -> {
-//				return new Tuple2<>(row._1 + ",'" + row._2 + "'", 1);
-//			}).reduceByKey((a, b) -> a + b).map(row -> row._1 + "," + row._2()).repartition(1)
-//					.count();
-//			saveAsTextFile("/home/momchil/Desktop/master-thesis/statistics/words.vectors");
+			// compute the false positive rate per label
+			StringBuilder results = new StringBuilder();
+			results.append("label\tfpr\n");
+			for (int label = 0; label < numClasses; label++) {
+			  results.append(label);
+			  results.append("\t");
+			  results.append(metrics.falsePositiveRate((double) label));
+			  results.append("\n");
+			}
 
-//			TokenTransform tokenizer = new TokenTransform(conf.isVerbose());
-//
-//			// Random shuffle by sort by content
-//			JavaPairRDD<Double, Multiset<String>> trainingDocs = unreliableData[0].unionAll(credibleData[0])
-//					.sort("content").javaRDD().mapToPair(tokenizer::transform).cache();
-//			trainingDocs.cache();
-//
-//			JavaPairRDD<Double, Multiset<String>> testDocs = unreliableData[1].unionAll(credibleData[1]).sort("content")
-//					.javaRDD().mapToPair(tokenizer::transform);
-//			testDocs.cache();
-//
-//			long trainingCount = trainingDocs.count();
-//
-//			TFIDFTransform tfIdf = new TFIDFTransform(trainingCount, conf.isVerbose());
-//			tfIdf.extract(trainingDocs);
-//
-//			JavaRDD<LabeledPoint> training = trainingDocs.map(tfIdf::transform);
-//			training.cache();
-//			trainingDocs.unpersist();
-//			StandardScalerModel scaler = new StandardScaler().fit(training.map(row -> row.features()).rdd());
-//			training = training.map(row -> new LabeledPoint(row.label(), scaler.transform(row.features())));
-//
-//			JavaRDD<LabeledPoint> test = testDocs.map(tfIdf::transform);
-//			test = test.map(row -> new LabeledPoint(row.label(), scaler.transform(row.features())));
-//			test.cache();
-//			testDocs.unpersist();
-//
-//			ModelBase model = conf.getModel(training);
-//			training.unpersist();
-//
-//			test.cache();
-//
+			Matrix confusionMatrix = metrics.confusionMatrix();
+			// output the Confusion Matrix
+			System.out.println("Confusion Matrix");
+			System.out.println(confusionMatrix);
+			System.out.println();
+			System.out.println(results);
+			System.out.println("Test Error = " + (1.0 - accuracy));
+						
 //			long unreliableCount = testDocs.filter(row -> row._1 == 0).count();
 //			long credibleCount = testDocs.filter(row -> row._1 == 1).count();
 //
@@ -256,6 +226,24 @@ public class Main {
 //			System.out.println("Ne!Novite news:" + unreliableCount);
 //			System.out.println("Dnevnik news:" + credibleCount);
 		}
+	}
+
+
+	private static DataFrame getCommonFeatures(DataFrame train, String tokenizerOutputCol) {
+		RegexTokenizer tokenizer = new RegexTokenizer()
+				  .setInputCol("content")
+				  .setOutputCol(tokenizerOutputCol)
+				  .setPattern("[\\s!,.?;'\"]+")
+				  .setGaps(false);
+		
+		train = tokenizer.transform(train);
+		
+		TokenFeaturesExtractor tokenFeatures = new TokenFeaturesExtractor()
+				.setInputCol(tokenizer.getOutputCol())
+				.setOutputCol("commonfeatures");
+		train = tokenFeatures.transform(train);
+		
+		return train;
 	}
 
 }

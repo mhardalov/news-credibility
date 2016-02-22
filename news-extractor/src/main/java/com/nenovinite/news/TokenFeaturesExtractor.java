@@ -1,7 +1,6 @@
 package com.nenovinite.news;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -11,9 +10,11 @@ import org.apache.spark.ml.param.ParamMap;
 import org.apache.spark.ml.param.shared.HasInputCol;
 import org.apache.spark.ml.param.shared.HasOutputCol;
 import org.apache.spark.ml.util.Identifiable$;
+import org.apache.spark.mllib.linalg.Vector;
+import org.apache.spark.mllib.linalg.VectorUDT;
+import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
@@ -40,6 +41,8 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 	private Param<String> inputCol = new Param<String>(this, "content", "input column name");
 	private Param<String> outputCol = new Param<String>(this, "tokens", "output column name");
 
+	private VectorUDT outputDataType = new VectorUDT();
+
 	
 	public TokenFeaturesExtractor() {}
 	
@@ -52,8 +55,8 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 		return uid_;
 	}
 
-	public Function1<WrappedArray<String>, scala.collection.immutable.List<Double>> createTransformFunc() {
-		return new JavaFunction1<WrappedArray<String>, scala.collection.immutable.List<Double>>() {
+	public Function1<WrappedArray<String>, Vector> createTransformFunc() {
+		return new JavaFunction1<WrappedArray<String>, Vector>() {
 
 			/**
 			 * 
@@ -61,7 +64,7 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 			private static final long serialVersionUID = 1L;
 
 			@Override
-			public scala.collection.immutable.List<Double> apply(WrappedArray<String> tokens) {
+			public Vector apply(WrappedArray<String> tokens) {
 				
 				List<String> tokensList = new LinkedList<>(scala.collection.JavaConversions.asJavaList(tokens));
 				double tokensCount = (double) tokensList.size();
@@ -72,17 +75,18 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 					};
 				}
 				
-				List<Double> features = new LinkedList<>();
-				features.add(tokensCount);
-				features.add(upperCaseCount/(tokensCount+1));				
+				double[] features = new double[2];
+				features[0] = tokensCount;
+				features[1] = upperCaseCount/(tokensCount+1);
 
-				return scala.collection.JavaConversions.asScalaBuffer(features).toList();
+				Vector vector = Vectors.dense(features);
+				return vector;
 			}
 		};
 	}
 
 	public DataType outputDataType() {
-		return DataTypes.createArrayType(DataTypes.StringType, true);
+		return outputDataType;
 	}
 
 	@Override
@@ -138,7 +142,7 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 	@Override
 	public StructType transformSchema(StructType schema) {
 		StructType outputFields = schema
-				.add(new StructField(this.getOutputCol(), DataTypes.createArrayType(DataTypes.StringType), true,  Metadata.empty()));
+				.add(new StructField(this.getOutputCol(), this.outputDataType(), true,  Metadata.empty()));
 		return outputFields;
 	}
 	
