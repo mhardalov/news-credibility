@@ -7,7 +7,6 @@ import java.util.Random;
 import java.util.Set;
 
 import org.apache.commons.cli.ParseException;
-import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
@@ -21,17 +20,17 @@ import org.apache.spark.ml.feature.NGram;
 import org.apache.spark.ml.feature.RegexTokenizer;
 import org.apache.spark.ml.feature.StopWordsRemover;
 import org.apache.spark.ml.feature.VectorAssembler;
+import org.apache.spark.ml.feature.Word2Vec;
+import org.apache.spark.ml.feature.Word2VecModel;
 import org.apache.spark.ml.param.ParamMap;
 import org.apache.spark.ml.tuning.CrossValidator;
 import org.apache.spark.ml.tuning.CrossValidatorModel;
 import org.apache.spark.ml.tuning.ParamGridBuilder;
-import org.apache.spark.ml.util.MetadataUtils;
 import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
 
@@ -111,18 +110,14 @@ public class Main {
 			String tokenizerOutputCol = "tokens";
 			train = getCommonFeatures(train, tokenizerOutputCol);
 
-			StopWordsRemover remover = new StopWordsRemover()
-					.setCaseSensitive(false)
-					.setStopWords(STOP_WORDS.toArray(new String[STOP_WORDS.size()]))
-					.setInputCol(tokenizerOutputCol)
-					.setOutputCol("filtered");
+			
 			
 			NGram ngramTransformer = new NGram()
-					.setInputCol(remover.getOutputCol())
+					.setInputCol("filtered")
 					.setOutputCol("ngrams")
 					.setN(3);
 			
-			int numFeatures = 2000;
+			int numFeatures = 5000;
 			HashingTF hashingTF = new HashingTF()
 					.setInputCol(ngramTransformer.getOutputCol())
 					.setOutputCol("tf")
@@ -131,10 +126,18 @@ public class Main {
 			IDF idf = new IDF()
 					.setInputCol(hashingTF.getOutputCol())
 					.setOutputCol("idf")
-					.setMinDocFreq(10);
+					.setMinDocFreq(4);
+			
+			// Learn a mapping from words to Vectors.
+			Word2Vec word2Vec = new Word2Vec()
+			  .setInputCol("filtered")
+			  .setOutputCol("w2v")
+			  .setVectorSize(500)
+			  .setMinCount(3);
+			Word2VecModel w2vModel = word2Vec.fit(train);
 			
 			VectorAssembler assembler = new VectorAssembler()
-					  .setInputCols(new String[]{idf.getOutputCol()})
+					  .setInputCols(new String[]{idf.getOutputCol(), word2Vec.getOutputCol()})
 					  .setOutputCol("features");
 			
 			LogisticRegression lr = new LogisticRegression()
@@ -142,7 +145,7 @@ public class Main {
 					  .setRegParam(0.01);
 							
 			Pipeline pipeline = new Pipeline()
-					  .setStages(new PipelineStage[] {remover, ngramTransformer, hashingTF, idf, assembler, lr});
+					  .setStages(new PipelineStage[] { ngramTransformer, hashingTF, idf, w2vModel, assembler, lr});
 						
 //			Test Error = 0.028165007112375573
 //			Test Error = 0.030915125651967745
@@ -152,7 +155,7 @@ public class Main {
 			// With 3 values for hashingTF.numFeatures and 2 values for lr.regParam,
 			// this grid will have 3 x 2 = 6 parameter settings for CrossValidator to choose from.
 			ParamMap[] paramGrid = new ParamGridBuilder()
-					// 100, 1000
+				.addGrid(lr.maxIter(), new int[] {10, 100})
 			    .addGrid(hashingTF.numFeatures(), new int[]{10, 100, 2000})
 			    .addGrid(lr.regParam(), new double[]{0.1, 0.01})
 			    .build();
@@ -166,7 +169,7 @@ public class Main {
 			  .setEstimator(pipeline)
 			  .setEvaluator(new BinaryClassificationEvaluator())
 			  .setEstimatorParamMaps(paramGrid)
-			  .setNumFolds(2); // Use 3+ in practice
+			  .setNumFolds(10); // Use 3+ in practice
 
 			// Run cross-validation, and choose the best set of parameters.
 			CrossValidatorModel cvModel = cv.fit(train);
@@ -185,11 +188,10 @@ public class Main {
 			  .setMetricName("precision");
 			double accuracy = evaluator.evaluate(predictions);
 			
-			
 			// obtain metrics
-			MulticlassMetrics metrics = new MulticlassMetrics(predictions);
-			StructField predictionColSchema = predictions.schema().apply("prediction");
-			Integer numClasses = (Integer) MetadataUtils.getNumClasses(predictionColSchema).get();
+			MulticlassMetrics metrics = new MulticlassMetrics(predictions.select("prediction", "label"));
+//			StructField predictionColSchema = predictions.schema().apply("prediction");
+			Integer numClasses = 2;//(Integer) MetadataUtils.getNumClasses(predictionColSchema).get();
 
 			// compute the false positive rate per label
 			StringBuilder results = new StringBuilder();
@@ -207,6 +209,8 @@ public class Main {
 			System.out.println(confusionMatrix);
 			System.out.println();
 			System.out.println(results);
+			System.out.println("F-measure: " + metrics.fMeasure());
+			System.out.println("Precision: " + metrics.precision());
 			System.out.println("Test Error = " + (1.0 - accuracy));
 						
 //			long unreliableCount = testDocs.filter(row -> row._1 == 0).count();
@@ -242,6 +246,14 @@ public class Main {
 				.setInputCol(tokenizer.getOutputCol())
 				.setOutputCol("commonfeatures");
 		train = tokenFeatures.transform(train);
+		
+		StopWordsRemover remover = new StopWordsRemover()
+				.setCaseSensitive(false)
+				.setStopWords(STOP_WORDS.toArray(new String[STOP_WORDS.size()]))
+				.setInputCol(tokenizer.getOutputCol())
+				.setOutputCol("filtered");
+		
+		train = remover.transform(train);
 		
 		return train;
 	}
