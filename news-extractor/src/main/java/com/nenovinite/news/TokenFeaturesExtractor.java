@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.commons.math.stat.descriptive.rank.Max;
 import org.apache.spark.ml.Transformer;
 import org.apache.spark.ml.param.Param;
 import org.apache.spark.ml.param.ParamMap;
@@ -67,17 +68,30 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 			public Vector apply(WrappedArray<String> tokens) {
 				
 				List<String> tokensList = new LinkedList<>(scala.collection.JavaConversions.asJavaList(tokens));
-				double tokensCount = (double) tokensList.size();
+				double tokensCount = Math.max(1.0, (double) tokensList.size());
 				double upperCaseCount = 0;
+				double allUpperCaseCount = 0;
+				double firstUpperCase = 0;
+
 				for (String token : tokensList) {
 					if (token.matches(HAS_UPPER_CASE)) {
 						upperCaseCount++;
 					};
+					
+					if (token.matches(ALL_UPPER_CASE)) {
+						allUpperCaseCount++;
+					}
+					
+					if (token.matches(FIRST_UPPER_CASE)) {
+						firstUpperCase++;
+					}
 				}
 				
-				double[] features = new double[2];
+				double[] features = new double[4];
 				features[0] = tokensCount;
-				features[1] = upperCaseCount/(tokensCount+1);
+				features[1] = upperCaseCount/tokensCount;
+				features[2] = allUpperCaseCount/tokensCount;
+				features[3] = firstUpperCase/tokensCount;
 
 				Vector vector = Vectors.dense(features);
 				return vector;
