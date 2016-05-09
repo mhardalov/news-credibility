@@ -173,9 +173,9 @@ public class NewsCredibilityMain {
 		  .setOutputCol("w2v");
 		
 		List<String> assmeblerInput = new ArrayList<>();
-//			assmeblerInput.add(idf.getOutputCol());
-		assmeblerInput.add(word2Vec.getOutputCol());
-		assmeblerInput.add("commonfeatures");
+			assmeblerInput.add(idf.getOutputCol());
+//			assmeblerInput.add(word2Vec.getOutputCol());
+			assmeblerInput.add("commonfeatures");
 		
 		VectorAssembler assembler = new VectorAssembler()
 				  .setInputCols(assmeblerInput.toArray(new String[assmeblerInput.size()]))
@@ -185,7 +185,7 @@ public class NewsCredibilityMain {
 		
 //			ngramTransformer, hashingTF, idf,
 		Pipeline pipeline = new Pipeline()
-				  .setStages(new PipelineStage[] {  word2Vec, assembler, lr});
+				  .setStages(new PipelineStage[] { ngramTransformer, hashingTF, idf, /*word2Vec,*/  assembler, lr});
 					
 		// We use a ParamGridBuilder to construct a grid of parameters to search over.
 		// With 3 values for hashingTF.numFeatures and 2 values for lr.regParam,
@@ -274,11 +274,10 @@ public class NewsCredibilityMain {
 
 
 	public static void main(String[] args) throws ParseException {
-		NewsConfiguration conf = new NewsConfiguration(args);
-		
 		final Random rand = new SecureRandom();
-
-		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("Parser news");
+		final NewsConfiguration conf = new NewsConfiguration(args);
+		
+		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("News Classificator");
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
 
@@ -287,20 +286,23 @@ public class NewsCredibilityMain {
 			long seed = 11l;
 			double[] weights = new double[] { 0.7, 0.3 };
 
-			// Split initial RDD into two... [60% training data, 40% testing
-			// data].
+			// Split initial RDD into two... [60% training data, 40% testing data].
 			DataFrame[] unreliableData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
 					"\nAND (category = \"Политика\")", 
 					0.0).randomSplit(weights, seed);
-
-			// " LIMIT 15000"
-			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
-					"\nLIMIT 1061",
-					1.0).randomSplit(weights, seed);
 			
+			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
+					"\nLIMIT 5000",
+					1.0).randomSplit(weights, seed);
+
 			DataFrame train = unreliableData[0].unionAll(credibleData[0]).orderBy("content").cache();
 			DataFrame test = unreliableData[1].unionAll(credibleData[1]).orderBy("content").cache();			
-	
+			DataFrame validation = getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
+					"", 0.0)
+					.unionAll(credibleData[1])
+					.orderBy("content")
+					.cache();
+			
 			Transformer model = trainModel(train, TOKENIZER_OUTPUT, false);
 			
 			System.out.println("Evaluation on training set\n");
@@ -308,6 +310,9 @@ public class NewsCredibilityMain {
 			
 			System.out.println("Evaluation on testing set\n");
 			evaluateModel(test, model);
+			
+			System.out.println("Evaluation on validation set\n");
+			evaluateModel(validation, model);
 		}
 	}
 
