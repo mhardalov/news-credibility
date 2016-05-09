@@ -43,7 +43,7 @@ public class NewsCredibilityMain {
 
 	
 	private static final String TOKENIZER_OUTPUT = "tokens";
-	public final static Set<String> STOP_WORDS = new HashSet<String>(Arrays.asList(new String[] { "а", "автентичен",
+	private final static Set<String> STOP_WORDS = new HashSet<String>(Arrays.asList(new String[] { "а", "автентичен",
 			"аз", "ако", "ала", "бе", "без", "беше", "би", "бивш", "бивша", "бившо", "бил", "била", "били", "било",
 			"благодаря", "близо", "бъдат", "бъде", "бяха", "в", "вас", "ваш", "ваша", "вероятно", "вече", "взема", "ви",
 			"вие", "винаги", "внимава", "време", "все", "всеки", "всички", "всичко", "всяка", "във", "въпреки", "върху",
@@ -72,8 +72,13 @@ public class NewsCredibilityMain {
 		df.registerTempTable("news");
 		df.printSchema();
 		
-		String sql = "SELECT generateId('test') as id, " + bodyColumn + " as content, CAST(" + label + " as DOUBLE) as label FROM news "
-				+ whereClause;
+		String sql = "SELECT\n"
+				   + "  generateId('') AS id,\n"
+				   + "	" + bodyColumn + " AS content,\n"
+				   + "	CAST(" + label + " AS DOUBLE) AS label\n"
+				   + "FROM news\n"
+				   + "WHERE (nvl(" + bodyColumn + " , '') != '')\n"
+				   + whereClause;
 		DataFrame newsData = sqlContxt.sql(sql);
 		
 		return newsData;
@@ -132,6 +137,7 @@ public class NewsCredibilityMain {
 		System.out.println("Precision\t" + metrics.precision());
 		System.out.println("Accuracy\t" + accuracy);
 		System.out.println("Test-Error\t" + (1.0 - accuracy));
+		System.out.println();
 	}
 
 
@@ -284,10 +290,12 @@ public class NewsCredibilityMain {
 			// Split initial RDD into two... [60% training data, 40% testing
 			// data].
 			DataFrame[] unreliableData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
-					" WHERE category = \"Политика\" AND (content IS NOT NULL AND content <> '') ", 0.0).randomSplit(weights, seed);
+					"\nAND (category = \"Политика\")", 
+					0.0).randomSplit(weights, seed);
 
 			// " LIMIT 15000"
-			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", "WHERE (BodyText IS NOT NULL AND BodyText <> '') LIMIT 1061",
+			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
+					"\nLIMIT 1061",
 					1.0).randomSplit(weights, seed);
 			
 			DataFrame train = unreliableData[0].unionAll(credibleData[0]).orderBy("content").cache();
