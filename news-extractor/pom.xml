@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.nenovite</groupId>
 	<artifactId>news-extractor</artifactId>
-	<version>0.0.0.1</version>
+	<version>0.0.1-SNAPSHOT</version>
 	<name>news-extractor</name>
 
 	<properties>
@@ -17,7 +17,7 @@
 		<java.version>1.8</java.version>
 		<junit.version>4.11</junit.version>
 		<jsoup.version>1.8.1</jsoup.version>
-		<spark.version>1.6.0</spark.version>
+		<spark.version>1.6.1</spark.version>
 
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
