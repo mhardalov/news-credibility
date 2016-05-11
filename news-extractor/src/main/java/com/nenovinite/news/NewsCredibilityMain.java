@@ -37,6 +37,7 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataTypes;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
+import com.nenovinite.news.dataset.DatasetLoader;
 
 
 public class NewsCredibilityMain {
@@ -66,33 +67,6 @@ public class NewsCredibilityMain {
 			"харесва", "хиляди", "ч", "часа", "че", "често", "чрез", "ще", "щом", "юмрук", "я", "як", "zhelyo",
 			"не!новините", "\"дневник\"", "br2n" }));
 	
-	private static DataFrame getBodyContent(SQLContext sqlContxt, String jsonPath, String bodyColumn,
-			String whereClause, double label) {
-		DataFrame df = sqlContxt.read().json(jsonPath);
-		df.registerTempTable("news");
-		df.printSchema();
-		
-		String sql = "SELECT\n"
-				   + "  generateId('') AS id,\n"
-				   + "	" + bodyColumn + " AS content,\n"
-				   + "	CAST(" + label + " AS DOUBLE) AS label\n"
-				   + "FROM news\n"
-				   + "WHERE (nvl(" + bodyColumn + " , '') != '')\n"
-				   + whereClause;
-		DataFrame newsData = sqlContxt.sql(sql);
-		
-		return newsData;
-	}
-	
-	private static void registerUDFs(final Random rand, SQLContext sqlContxt) {
-		sqlContxt.udf().register("generateId", (String s) -> rand.nextInt(1000000), DataTypes.IntegerType);
-		sqlContxt.udf().register("getFeatures", (String s) -> {
-			int size = s.length();
-			
-			return size;
-		}, DataTypes.IntegerType);
-	}
-
 
 	private static void evaluateModel(DataFrame df, Transformer model) {
 		DataFrame predictions = predictForDF(df, model);
@@ -274,34 +248,18 @@ public class NewsCredibilityMain {
 
 
 	public static void main(String[] args) throws ParseException {
-		final Random rand = new SecureRandom();
 		final NewsConfiguration conf = new NewsConfiguration(args);
 		
 		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("News Classificator");
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
 
-			registerUDFs(rand, sqlContxt);
-			
-			long seed = 11l;
 			double[] weights = new double[] { 0.7, 0.3 };
 
-			// Split initial RDD into two... [60% training data, 40% testing data].
-			DataFrame[] unreliableData = getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
-					"\nAND (category = \"Политика\")", 
-					0.0).randomSplit(weights, seed);
-			
-			DataFrame[] credibleData = getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
-					"\nLIMIT 5000",
-					1.0).randomSplit(weights, seed);
-
-			DataFrame train = unreliableData[0].unionAll(credibleData[0]).orderBy("content").cache();
-			DataFrame test = unreliableData[1].unionAll(credibleData[1]).orderBy("content").cache();			
-			DataFrame validation = getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
-					"", 0.0)
-					.unionAll(credibleData[1])
-					.orderBy("content")
-					.cache();
+			DatasetLoader dataset = new DatasetLoader(sqlContxt, weights, conf);
+			DataFrame train = dataset.getTrainingSet();
+			DataFrame test = dataset.getTrainingSet();
+			DataFrame validation = dataset.getValidationSet();
 			
 			Transformer model = trainModel(train, TOKENIZER_OUTPUT, false);
 			
