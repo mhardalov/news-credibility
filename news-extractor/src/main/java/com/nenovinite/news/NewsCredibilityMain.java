@@ -1,11 +1,9 @@
 package com.nenovinite.news;
 
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 
 import org.apache.commons.cli.ParseException;
@@ -34,7 +32,6 @@ import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.types.DataTypes;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
 import com.nenovinite.news.dataset.DatasetLoader;
