@@ -37,7 +37,7 @@ public class DatasetLoader {
 				0.0);
 		
 		this.credibleData = this.getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
-				"",
+				"\nLIMIT 1061",
 				1.0);
 		
 		this.validationData = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
@@ -46,9 +46,21 @@ public class DatasetLoader {
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);
 		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), weights);
 		
-		this.train = unreliableSplits[0].unionAll(credibleSplits[0]).orderBy("content").cache();
-		this.test = unreliableSplits[1].unionAll(credibleSplits[1]).orderBy("content").cache();
-		this.validation = validationData.unionAll(credibleSplits[1]).orderBy("content").cache();
+		DataFrame uTrainingSplit = unreliableSplits[0].cache();
+		DataFrame cTrainingSplit = credibleSplits[0].cache();
+		
+		DataFrame uTestingSplit = unreliableSplits[1].cache();
+		DataFrame cTestingSplit = credibleSplits[1].cache();
+
+		this.train = uTrainingSplit.unionAll(cTrainingSplit).orderBy("content").repartition(10).cache();
+		uTrainingSplit.unpersist();
+		cTrainingSplit.unpersist();
+		
+		this.test = uTestingSplit.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+		uTestingSplit.unpersist();
+		
+		this.validation = validationData.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+		cTestingSplit.unpersist();
 	}
 	
 	private DataFrame[] getSplitsFromDF(DataFrame df, double[] weights) {

@@ -1,12 +1,21 @@
 package com.nenovinite.news;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
 
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
@@ -36,10 +45,13 @@ import org.apache.spark.sql.SQLContext;
 import com.nenovinite.news.configuration.NewsConfiguration;
 import com.nenovinite.news.dataset.DatasetLoader;
 
+import scala.collection.parallel.ParIterableLike.Collect;
+
 
 public class NewsCredibilityMain {
 
 	
+	private static final String TSV_TEMPLATE = "/home/momchil/Documents/MasterThesis/experiments/%s.tsv";
 	private static final String TOKENIZER_OUTPUT = "tokens";
 	private final static Set<String> STOP_WORDS = new HashSet<String>(Arrays.asList(new String[] { "а", "автентичен",
 			"аз", "ако", "ала", "бе", "без", "беше", "би", "бивш", "бивша", "бившо", "бил", "била", "били", "било",
@@ -63,9 +75,10 @@ public class NewsCredibilityMain {
 			"тогава", "този", "той", "толкова", "точно", "три", "трябва", "тук", "тъй", "тя", "тях", "у", "утре",
 			"харесва", "хиляди", "ч", "часа", "че", "често", "чрез", "ще", "щом", "юмрук", "я", "як", "zhelyo",
 			"не!новините", "\"дневник\"", "br2n" }));
+	private static String stagesToString;
 	
 
-	private static void evaluateModel(DataFrame df, Transformer model) {
+	private static void evaluateModel(DataFrame df, Transformer model, String outputPath, String title) {
 		DataFrame predictions = predictForDF(df, model);
 
 		// Select (prediction, true label) and compute test error
@@ -82,6 +95,10 @@ public class NewsCredibilityMain {
 
 		// compute the false positive rate per label
 		StringBuilder results = new StringBuilder();
+		
+		results.append(title + "\n");
+		results.append("Features used:\t" + stagesToString + "\n");
+		
 		results.append("label\tfpr\ttpr\trecall\tprecision\tfmeasure\n");
 		for (int label = 0; label < numClasses; label++) {
 		  results.append(label);
@@ -99,16 +116,28 @@ public class NewsCredibilityMain {
 		}
 
 		Matrix confusionMatrix = metrics.confusionMatrix();
+		results.append("\n");
+		
 		// output the Confusion Matrix
-		System.out.println("Confusion Matrix");
-		System.out.println(confusionMatrix);
-		System.out.println();
+		results.append("Confusion Matrix\n");
+		results.append(confusionMatrix.toString().replaceAll("[ ]+", "\t") + "\n");
+		results.append("\n");
+		
+		results.append("F-measure\t" + metrics.fMeasure() + "\n");
+		results.append("Precision\t" + metrics.precision() + "\n");
+		results.append("Accuracy\t" + accuracy  + "\n");
+		results.append("Test-Error\t" + (1.0 - accuracy) + "\n");
+		results.append("\n");
+		
 		System.out.println(results);
-		System.out.println("F-measure\t" + metrics.fMeasure());
-		System.out.println("Precision\t" + metrics.precision());
-		System.out.println("Accuracy\t" + accuracy);
-		System.out.println("Test-Error\t" + (1.0 - accuracy));
-		System.out.println();
+		
+		try {
+			(new File(outputPath)).createNewFile();
+			Files.write(Paths.get(outputPath), results.toString().getBytes(), StandardOpenOption.APPEND);
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
 	}
 
 
@@ -144,8 +173,8 @@ public class NewsCredibilityMain {
 		  .setOutputCol("w2v");
 		
 		List<String> assmeblerInput = new ArrayList<>();
-			assmeblerInput.add(idf.getOutputCol());
-//			assmeblerInput.add(word2Vec.getOutputCol());
+//			assmeblerInput.add(idf.getOutputCol());
+			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add("commonfeatures");
 		
 		VectorAssembler assembler = new VectorAssembler()
@@ -155,8 +184,11 @@ public class NewsCredibilityMain {
 		LogisticRegression lr = new LogisticRegression();
 		
 //			ngramTransformer, hashingTF, idf,
+		PipelineStage[] pipelineStages = new PipelineStage[] { /*ngramTransformer, hashingTF, idf, */word2Vec,  assembler, lr};
 		Pipeline pipeline = new Pipeline()
-				  .setStages(new PipelineStage[] { ngramTransformer, hashingTF, idf, /*word2Vec,*/  assembler, lr});
+				  .setStages(pipelineStages);
+		
+		stagesToString = ("commonfeatures_suff1x\t" + StringUtils.join(pipelineStages, "\t")).replaceAll("([A-Za-z]+)_[0-9A-Za-z]+", "$1");
 					
 		// We use a ParamGridBuilder to construct a grid of parameters to search over.
 		// With 3 values for hashingTF.numFeatures and 2 values for lr.regParam,
@@ -246,29 +278,35 @@ public class NewsCredibilityMain {
 
 	public static void main(String[] args) throws ParseException {
 		final NewsConfiguration conf = new NewsConfiguration(args);
-		
+
 		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("News Classificator");
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
 
-			double[] weights = new double[] { 0.7, 0.3 };
+			Double[] weights = new Double[] { 0.7, 0.3 };
+			List<Double> percents = Arrays.asList(weights).stream().mapToDouble(w -> w * 100.0).boxed().collect(Collectors.toList());
 
-			DatasetLoader dataset = new DatasetLoader(sqlContxt, weights, conf);
+			DatasetLoader dataset = new DatasetLoader(sqlContxt, ArrayUtils.toPrimitive(weights), conf);
 			DataFrame train = dataset.getTrainingSet();
-			DataFrame test = dataset.getTrainingSet();
+			DataFrame test = dataset.getTestingSet();
 			DataFrame validation = dataset.getValidationSet();
 			
 			Transformer model = trainModel(train, TOKENIZER_OUTPUT, false);
+
+			String outputPath = prepareFile(TSV_TEMPLATE, percents);
 			
-			System.out.println("Evaluation on training set\n");
-			evaluateModel(train, model);
-			
-			System.out.println("Evaluation on testing set\n");
-			evaluateModel(test, model);
-			
-			System.out.println("Evaluation on validation set\n");
-			evaluateModel(validation, model);
+			evaluateModel(train, model, outputPath, "Evaluation on training set\n");
+			evaluateModel(test, model, outputPath, "Evaluation on testing set\n");
+			evaluateModel(validation, model, outputPath, "Evaluation on validation set\n");
 		}
+	}
+
+
+	private static String prepareFile(String outputPath, List<Double> percents) {
+		String fileName = "features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
+		outputPath = String.format(outputPath, fileName);
+		(new File(outputPath)).delete();
+		return outputPath;
 	}
 
 }
