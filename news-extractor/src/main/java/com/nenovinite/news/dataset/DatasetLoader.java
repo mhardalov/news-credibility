@@ -37,10 +37,11 @@ public class DatasetLoader {
 				0.0);
 		
 		this.credibleData = this.getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
-				"\nLIMIT 1061",
+				"\nORDER BY DatePublished DESC\n"
+				+ "LIMIT 1061",
 				1.0);
 		
-		this.validationData = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
+		this.validationData = this.getBodyContent(sqlContxt, conf.getValidationDataset(), "content",
 				"", 0.0);
 		
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);

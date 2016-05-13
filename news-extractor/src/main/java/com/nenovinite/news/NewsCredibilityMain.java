@@ -48,7 +48,7 @@ import com.nenovinite.news.dataset.DatasetLoader;
 public class NewsCredibilityMain {
 
 	
-	private static final String TSV_TEMPLATE = "/home/momchil/Documents/MasterThesis/experiments/%s.tsv";
+	private static final String TSV_TEMPLATE = "%s/ordered:%s.tsv";
 	private static final String TOKENIZER_OUTPUT = "tokens";
 	private final static Set<String> STOP_WORDS = new HashSet<String>(Arrays.asList(new String[] { "а", "автентичен",
 			"аз", "ако", "ала", "бе", "без", "беше", "би", "бивш", "бивша", "бившо", "бил", "била", "били", "било",
@@ -74,6 +74,13 @@ public class NewsCredibilityMain {
 			"не!новините", "\"дневник\"", "br2n" }));
 	
 	private static String stagesToString;
+
+	private static String prepareFile(String template, String filePath, List<Double> percents) {
+		String fileName = "features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
+		template = String.format(template, filePath, fileName);
+		(new File(template)).delete();
+		return template;
+	}
 	
 	private static double calcFMeasure(double precision, double recall, double beta) {
 		double betaPow2 = Math.pow(beta, 2);
@@ -318,20 +325,11 @@ public class NewsCredibilityMain {
 			
 			Transformer model = trainModel(train, TOKENIZER_OUTPUT, false);
 
-			String outputPath = prepareFile(TSV_TEMPLATE, percents);
+			String outputPath = prepareFile(TSV_TEMPLATE, conf.getOutputFolder(), percents);
 			
 			evaluateModel(sqlContxt, train, model, outputPath, "Evaluation on training set\n");
 			evaluateModel(sqlContxt, test, model, outputPath, "Evaluation on testing set\n");
 			evaluateModel(sqlContxt, validation, model, outputPath, "Evaluation on validation set\n");
 		}
 	}
-
-
-	private static String prepareFile(String outputPath, List<Double> percents) {
-		String fileName = "features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
-		outputPath = String.format(outputPath, fileName);
-		(new File(outputPath)).delete();
-		return outputPath;
-	}
-
 }
