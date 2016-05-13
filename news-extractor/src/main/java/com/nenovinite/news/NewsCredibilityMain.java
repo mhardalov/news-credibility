@@ -199,7 +199,7 @@ public class NewsCredibilityMain {
 		  .setOutputCol("w2v");
 		
 		List<String> assmeblerInput = new ArrayList<>();
-//			assmeblerInput.add(idf.getOutputCol());
+			assmeblerInput.add(idf.getOutputCol());
 			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add("commonfeatures");
 		
@@ -210,7 +210,7 @@ public class NewsCredibilityMain {
 		LogisticRegression lr = new LogisticRegression();
 		
 //			ngramTransformer, hashingTF, idf,
-		PipelineStage[] pipelineStages = new PipelineStage[] { /*ngramTransformer, hashingTF, idf, */word2Vec,  assembler, lr};
+		PipelineStage[] pipelineStages = new PipelineStage[] { ngramTransformer, hashingTF, idf, word2Vec,  assembler, lr};
 		Pipeline pipeline = new Pipeline()
 				  .setStages(pipelineStages);
 		
