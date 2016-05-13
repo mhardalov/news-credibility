@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.DoubleStream;
 
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang.StringUtils;
@@ -45,8 +44,6 @@ import org.apache.spark.sql.SQLContext;
 import com.nenovinite.news.configuration.NewsConfiguration;
 import com.nenovinite.news.dataset.DatasetLoader;
 
-import scala.collection.parallel.ParIterableLike.Collect;
-
 
 public class NewsCredibilityMain {
 
@@ -75,11 +72,17 @@ public class NewsCredibilityMain {
 			"тогава", "този", "той", "толкова", "точно", "три", "трябва", "тук", "тъй", "тя", "тях", "у", "утре",
 			"харесва", "хиляди", "ч", "часа", "че", "често", "чрез", "ще", "щом", "юмрук", "я", "як", "zhelyo",
 			"не!новините", "\"дневник\"", "br2n" }));
+	
 	private static String stagesToString;
 	
+	private static double calcFMeasure(double precision, double recall, double beta) {
+		double betaPow2 = Math.pow(beta, 2);
+		double fMeasure = ((1 + betaPow2 ) * precision * recall) / (betaPow2 * (precision) + recall);
+		return fMeasure;
+	}
 
-	private static void evaluateModel(DataFrame df, Transformer model, String outputPath, String title) {
-		DataFrame predictions = predictForDF(df, model);
+	private static void evaluateModel(SQLContext sqlContxt, DataFrame df, Transformer model, String outputPath, String title) {
+		DataFrame predictions = predictForDF(df, model).select("prediction", "label").cache();
 
 		// Select (prediction, true label) and compute test error
 		MulticlassClassificationEvaluator evaluator = new MulticlassClassificationEvaluator()
@@ -89,7 +92,8 @@ public class NewsCredibilityMain {
 		double accuracy = evaluator.evaluate(predictions);
 		
 		// obtain metrics
-		MulticlassMetrics metrics = new MulticlassMetrics(predictions.select("prediction", "label"));
+		MulticlassMetrics metrics = new MulticlassMetrics(predictions);
+		predictions.unpersist();
 //			StructField predictionColSchema = predictions.schema().apply("prediction");
 		Integer numClasses = 2;//(Integer) MetadataUtils.getNumClasses(predictionColSchema).get();
 
@@ -99,9 +103,24 @@ public class NewsCredibilityMain {
 		results.append(title + "\n");
 		results.append("Features used:\t" + stagesToString + "\n");
 		
-		results.append("label\tfpr\ttpr\trecall\tprecision\tfmeasure\n");
+		results.append("label\texamples\tfpr\ttpr\trecall\tprecision\tfmeasure\n");
+		Matrix confusionMatrix = metrics.confusionMatrix();
+		double tp = confusionMatrix.apply(0, 0);
+		double fp = confusionMatrix.apply(1, 0);
+		double fn = confusionMatrix.apply(0, 1);
+		double tn = confusionMatrix.apply(1, 1);
+		
+		double[] examplesPerClass = new double[numClasses];
+		for (int label = 0; label < numClasses; label++) {
+			for (int i = 0; i < numClasses; i++) {
+				examplesPerClass[label] += confusionMatrix.apply(label, i);
+			}
+		}
+		
 		for (int label = 0; label < numClasses; label++) {
 		  results.append(label);
+		  results.append("\t");
+		  results.append(examplesPerClass[label]);
 		  results.append("\t");
 		  results.append(metrics.falsePositiveRate((double) label));
 		  results.append("\t");
@@ -115,7 +134,12 @@ public class NewsCredibilityMain {
 		  results.append("\n");
 		}
 
-		Matrix confusionMatrix = metrics.confusionMatrix();
+		double precision = tp / (tp + fp);
+		double recall = tp / (tp + fn);
+		accuracy = (tp + tn) / (tp + fp + fn + tn);
+		double f1Measure = calcFMeasure(precision, recall, 1.0);
+		double f2Measure = calcFMeasure(precision, recall, 2.0);
+		
 		results.append("\n");
 		
 		// output the Confusion Matrix
@@ -123,8 +147,10 @@ public class NewsCredibilityMain {
 		results.append(confusionMatrix.toString().replaceAll("[ ]+", "\t") + "\n");
 		results.append("\n");
 		
-		results.append("F-measure\t" + metrics.fMeasure() + "\n");
-		results.append("Precision\t" + metrics.precision() + "\n");
+		results.append("F-measure1\t" + f1Measure + "\n");
+		results.append("F-measure2\t" + f2Measure + "\n");
+		results.append("Precision\t" + precision + "\n");
+		results.append("Recall\t" + recall + "\n");
 		results.append("Accuracy\t" + accuracy  + "\n");
 		results.append("Test-Error\t" + (1.0 - accuracy) + "\n");
 		results.append("\n");
@@ -274,8 +300,7 @@ public class NewsCredibilityMain {
 		
 		return train;
 	}
-
-
+	
 	public static void main(String[] args) throws ParseException {
 		final NewsConfiguration conf = new NewsConfiguration(args);
 
@@ -295,9 +320,9 @@ public class NewsCredibilityMain {
 
 			String outputPath = prepareFile(TSV_TEMPLATE, percents);
 			
-			evaluateModel(train, model, outputPath, "Evaluation on training set\n");
-			evaluateModel(test, model, outputPath, "Evaluation on testing set\n");
-			evaluateModel(validation, model, outputPath, "Evaluation on validation set\n");
+			evaluateModel(sqlContxt, train, model, outputPath, "Evaluation on training set\n");
+			evaluateModel(sqlContxt, test, model, outputPath, "Evaluation on testing set\n");
+			evaluateModel(sqlContxt, validation, model, outputPath, "Evaluation on validation set\n");
 		}
 	}
 
