@@ -40,6 +40,7 @@ import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.types.DataTypes;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
 import com.nenovinite.news.dataset.DatasetLoader;
@@ -283,19 +284,19 @@ public class NewsCredibilityMain {
 	}
 
 
-	private static DataFrame getCommonFeatures(DataFrame train, String tokenizerOutputCol) {
+	private static DataFrame getCommonFeatures(DataFrame df, String tokenizerOutputCol) {
 		RegexTokenizer tokenizer = new RegexTokenizer()
 				  .setInputCol("content")
 				  .setOutputCol(tokenizerOutputCol)
 				  .setPattern("[\\s!,.?;'\"]+")
 				  .setGaps(false);
 		
-		train = tokenizer.transform(train);
+		df = tokenizer.transform(df);
 		
 		TokenFeaturesExtractor tokenFeatures = new TokenFeaturesExtractor()
 				.setInputCol(tokenizer.getOutputCol())
 				.setOutputCol("commonfeatures");
-		train = tokenFeatures.transform(train);
+		df = tokenFeatures.transform(df);
 		
 		StopWordsRemover remover = new StopWordsRemover()
 				.setCaseSensitive(false)
@@ -303,9 +304,12 @@ public class NewsCredibilityMain {
 				.setInputCol(tokenizer.getOutputCol())
 				.setOutputCol("filtered");
 		
-		train = remover.transform(train);
+		df = remover.transform(df);
 		
-		return train;
+		//TODO: remove comment and test method.
+//		df = df.selectExpr("*, getOccurrences(content, '!') as excl_marks, ");
+		
+		return df;
 	}
 	
 	public static void main(String[] args) throws ParseException {
@@ -314,6 +318,13 @@ public class NewsCredibilityMain {
 		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("News Classificator");
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
+			sqlContxt.udf().register("getOccurrences", (String content, String substring) -> {
+				int originalLen = content.length();
+				int leftOverLength = content.replace(substring, "").length();
+				int subStrLen = substring.length();
+				
+				return (originalLen - leftOverLength) / subStrLen;
+			}, DataTypes.DoubleType);
 
 			Double[] weights = new Double[] { 0.7, 0.3 };
 			List<Double> percents = Arrays.asList(weights).stream().mapToDouble(w -> w * 100.0).boxed().collect(Collectors.toList());

@@ -1,10 +1,12 @@
 package com.nenovinite.news;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
-import org.apache.commons.math.stat.descriptive.rank.Max;
 import org.apache.spark.ml.Transformer;
 import org.apache.spark.ml.param.Param;
 import org.apache.spark.ml.param.ParamMap;
@@ -36,6 +38,13 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 	private static final String HAS_EXCL_MARK = "^.*[!?].*$";
 	private static final String HAS_QUOTES = "^.*\".*$";
 	private static final String HAS_COMMA = "^.*[,;].*$";
+	private static final String HAS_URL = "://";
+	private static final Set<String> FIRST_PERSON = new HashSet<>(
+			Arrays.asList("аз", "ти", "той", "тя", "то", "мене", "мен", "ме", "мене", "ми", "тебе", "теб", "те", "тебе",
+					"ти", "него", "нея", "него", "го", "я", "го", "нему", "ней", "нему", "му", "й", "му"));
+	private static final Set<String> THIRD_PERSON = new HashSet<>(Arrays.asList("ние", "ний", "вие", "вий", "те", "нас",
+			"ни", "нам", "ни", "вас", "ви", "вам", "ви", "тях", "ги", "тям", "им"));
+	
 
 	private String uid_ = Identifiable$.MODULE$.randomUID(this.getClass().toString().toLowerCase());
 
@@ -69,9 +78,13 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				
 				List<String> tokensList = new LinkedList<>(scala.collection.JavaConversions.asJavaList(tokens));
 				double tokensCount = Math.max(1.0, (double) tokensList.size());
-				double upperCaseCount = 0;
-				double allUpperCaseCount = 0;
-				double firstUpperCase = 0;
+				double upperCaseCount = 0.0;
+				double allUpperCaseCount = 0.0;
+				double firstUpperCase = 0.0;
+				double hasUrl = 0.0;
+				double hasHashTag = 0.0;
+				double firstPersonPronouns = 0.0;
+				double thirdPersonPronouns = 0.0;
 
 				for (String token : tokensList) {
 					if (token.matches(HAS_UPPER_CASE)) {
@@ -85,13 +98,33 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 					if (token.matches(FIRST_UPPER_CASE)) {
 						firstUpperCase++;
 					}
+					
+					if (token.matches(HAS_URL)) {
+						hasUrl++;
+					}
+					
+					if (token.contains("#")) {
+						hasHashTag++;
+					}
+					
+					if (FIRST_PERSON.contains(token)) {
+						firstPersonPronouns++;
+					}
+					
+					if (THIRD_PERSON.contains(token)) {
+						thirdPersonPronouns++;
+					}
 				}
 				
-				double[] features = new double[4];
+				double[] features = new double[8];
 				features[0] = tokensCount;
 				features[1] = upperCaseCount/tokensCount;
 				features[2] = allUpperCaseCount/tokensCount;
 				features[3] = firstUpperCase/tokensCount;
+				features[4] = hasUrl/tokensCount;
+				features[5] = hasHashTag/tokensCount;
+				features[6] = firstPersonPronouns/tokensCount;
+				features[7] = thirdPersonPronouns/tokensCount;
 
 				Vector vector = Vectors.dense(features);
 				return vector;
