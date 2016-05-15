@@ -21,6 +21,7 @@ import org.codehaus.jettison.json.JSONObject;
 
 import com.news.hbase.extract.base.HbaseReaderBase;
 import com.news.hbase.extract.bazikileaks.BazikileaksReader;
+import com.news.hbase.extract.btv.BtvLifestyleReader;
 import com.news.hbase.extract.nenovinite.NeNoviniteReader;
 
 public class Main {
@@ -76,10 +77,14 @@ public class Main {
 				while (resultsIter.hasNext()) {
 
 					Result result = resultsIter.next();
-					// HbaseReaderBase jReader = new NeNoviniteReader(result);
-					HbaseReaderBase jReader = new BazikileaksReader(result);
-
-					jsonStrings.add(jReader.toJSON());
+					try {
+						// HbaseReaderBase jReader = new NeNoviniteReader(result);
+						HbaseReaderBase jReader = new BtvLifestyleReader(result);
+	
+						jsonStrings.add(jReader.toJSON());
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
 
 					if (i % 100 == 0) {
 						System.out.println(i);
@@ -98,7 +103,7 @@ public class Main {
 			ex.printStackTrace();
 		}
 
-		FileWriter writer = new FileWriter("/home/momchil/Desktop/bazikleaks/data-extended.json");
+		FileWriter writer = new FileWriter("/home/momchil/Documents/MasterThesis/dataset/btv-lifestyle-data-extended.json");
 		for (String str : jsonStrings) {
 			writer.write(str + "\n");
 		}
