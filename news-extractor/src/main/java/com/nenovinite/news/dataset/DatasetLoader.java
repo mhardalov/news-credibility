@@ -26,6 +26,10 @@ public class DatasetLoader {
 			
 			return size;
 		}, DataTypes.IntegerType);
+		
+		sqlContxt.udf().register("categoryToLabel", (String cat) -> {
+			return (cat.equals("Лайфстайл")) ? 0.0 : 1.0;
+		}, DataTypes.DoubleType);
 	}
 
 	public DatasetLoader(SQLContext sqlContxt, double[] weights, NewsConfiguration conf) {
@@ -33,16 +37,17 @@ public class DatasetLoader {
 		this.registerUDFs(rand, sqlContxt);
 		
 		this.unreliableData = this.getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
-				"\nAND (category = \"Политика\")", 
-				0.0);
+//				\nAND (category = \"Политика\")
+				"", 
+				"0.0");
 		
 		this.credibleData = this.getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
 				"\nORDER BY DatePublished DESC\n"
-				+ "LIMIT 1061",
-				1.0);
+				+ "LIMIT 6061",
+				"1.0");
 		
 		this.validationData = this.getBodyContent(sqlContxt, conf.getValidationDataset(), "content",
-				"", 0.0);
+				"", "categoryToLabel(category)");
 		
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);
 		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), weights);
@@ -60,7 +65,7 @@ public class DatasetLoader {
 		this.test = uTestingSplit.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
 		uTestingSplit.unpersist();
 		
-		this.validation = validationData.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+		this.validation = validationData.orderBy("content").repartition(10).cache();
 		cTestingSplit.unpersist();
 	}
 	
@@ -69,7 +74,7 @@ public class DatasetLoader {
 	}
 	
 	private DataFrame getBodyContent(SQLContext sqlContxt, String jsonPath, String bodyColumn,
-			String whereClause, double label) {
+			String whereClause, String label) {
 		DataFrame df = sqlContxt.read().json(jsonPath);
 		df.registerTempTable("news");
 		df.printSchema();
@@ -77,7 +82,7 @@ public class DatasetLoader {
 		String sql = "SELECT\n"
 				   + "  generateId('') AS id,\n"
 				   + "	" + bodyColumn + " AS content,\n"
-				   + "	CAST(" + label + " AS DOUBLE) AS label\n"
+				   + "	CAST(" + label + " AS Double) AS label\n"
 				   + "FROM news\n"
 				   + "WHERE (nvl(" + bodyColumn + " , '') != '')\n"
 				   + whereClause;

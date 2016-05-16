@@ -30,6 +30,7 @@ import org.apache.spark.ml.feature.RegexTokenizer;
 import org.apache.spark.ml.feature.StopWordsRemover;
 import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.ml.feature.Word2Vec;
+import org.apache.spark.ml.feature.Word2VecModel;
 import org.apache.spark.ml.param.ParamMap;
 import org.apache.spark.ml.tuning.CrossValidator;
 import org.apache.spark.ml.tuning.CrossValidatorModel;
@@ -44,12 +45,14 @@ import org.apache.spark.sql.types.DataTypes;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
 import com.nenovinite.news.dataset.DatasetLoader;
+import com.nenovinite.news.features.extractors.Word2VecExtractor;
 
 
 public class NewsCredibilityMain {
 
 	
-	private static final String TSV_TEMPLATE = "%s/ordered:%s.tsv";
+	private static final String W2V_DB = "w2vDB";
+	private static final String TSV_TEMPLATE = "%s/lifestyle:ordered:%s.tsv";
 	private static final String TOKENIZER_OUTPUT = "tokens";
 	private final static Set<String> STOP_WORDS = new HashSet<String>(Arrays.asList(new String[] { "а", "автентичен",
 			"аз", "ако", "ала", "бе", "без", "беше", "би", "бивш", "бивша", "бившо", "бил", "била", "били", "било",
@@ -75,6 +78,7 @@ public class NewsCredibilityMain {
 			"не!новините", "\"дневник\"", "br2n" }));
 	
 	private static String stagesToString;
+	private static Word2VecModel w2vModel;
 
 	private static String prepareFile(String template, String filePath, List<Double> percents) {
 		String fileName = "features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
@@ -189,12 +193,8 @@ public class NewsCredibilityMain {
 	private static Transformer trainModel(DataFrame train, String tokenizerOutputCol, boolean useCV) {
 		train = getCommonFeatures(train, TOKENIZER_OUTPUT);
 		
-		NGram ngramTransformer = new NGram()
-				.setInputCol("filtered")
-				.setOutputCol("ngrams");
-		
 		HashingTF hashingTF = new HashingTF()
-				.setInputCol(ngramTransformer.getOutputCol())
+				.setInputCol("ngrams")
 				.setOutputCol("tf");
 		
 		IDF idf = new IDF()
@@ -207,9 +207,10 @@ public class NewsCredibilityMain {
 		  .setOutputCol("w2v");
 		
 		List<String> assmeblerInput = new ArrayList<>();
-			assmeblerInput.add(idf.getOutputCol());
-			assmeblerInput.add(word2Vec.getOutputCol());
+//			assmeblerInput.add(idf.getOutputCol());
+//			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add("commonfeatures");
+			assmeblerInput.add(W2V_DB);
 		
 		VectorAssembler assembler = new VectorAssembler()
 				  .setInputCols(assmeblerInput.toArray(new String[assmeblerInput.size()]))
@@ -218,7 +219,7 @@ public class NewsCredibilityMain {
 		LogisticRegression lr = new LogisticRegression();
 		
 //			ngramTransformer, hashingTF, idf,
-		PipelineStage[] pipelineStages = new PipelineStage[] { ngramTransformer, hashingTF, idf, word2Vec,  assembler, lr};
+		PipelineStage[] pipelineStages = new PipelineStage[] { /*hashingTF, idf, word2Vec,*/  assembler, lr};
 		Pipeline pipeline = new Pipeline()
 				  .setStages(pipelineStages);
 		
@@ -306,6 +307,14 @@ public class NewsCredibilityMain {
 		
 		df = remover.transform(df);
 		
+		NGram ngramTransformer = new NGram()
+				.setInputCol(remover.getOutputCol())
+				.setOutputCol("ngrams");
+		
+		df = ngramTransformer.transform(df);
+		
+		df = w2vModel.transform(df);
+		
 		//TODO: remove comment and test method.
 //		df = df.selectExpr("*, getOccurrences(content, '!') as excl_marks, ");
 		
@@ -333,6 +342,9 @@ public class NewsCredibilityMain {
 			DataFrame train = dataset.getTrainingSet();
 			DataFrame test = dataset.getTestingSet();
 			DataFrame validation = dataset.getValidationSet();
+			
+			DataFrame dbPediaw2v = Word2VecExtractor.getTrainingDataset(sqlContxt);
+			w2vModel = Word2VecExtractor.trainw2v(dbPediaw2v, W2V_DB);
 			
 			Transformer model = trainModel(train, TOKENIZER_OUTPUT, false);
 
