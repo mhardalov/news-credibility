@@ -26,6 +26,7 @@ import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
 import org.apache.spark.ml.feature.HashingTF;
 import org.apache.spark.ml.feature.IDF;
 import org.apache.spark.ml.feature.NGram;
+import org.apache.spark.ml.feature.Normalizer;
 import org.apache.spark.ml.feature.RegexTokenizer;
 import org.apache.spark.ml.feature.StopWordsRemover;
 import org.apache.spark.ml.feature.VectorAssembler;
@@ -193,6 +194,14 @@ public class NewsCredibilityMain {
 	private static Transformer trainModel(SQLContext sqlContxt, DataFrame train, String tokenizerOutputCol, boolean useCV) {
 		train = getCommonFeatures(sqlContxt, train, TOKENIZER_OUTPUT);
 		
+		VectorAssembler featuresForNorm = new VectorAssembler()
+				.setInputCols(new String[] {"num_tokens"})
+				.setOutputCol("features_for_norm");
+		
+		Normalizer norm = new Normalizer()
+				.setInputCol(featuresForNorm.getOutputCol())
+				.setOutputCol("norm_features");
+		
 		HashingTF hashingTF = new HashingTF()
 				.setInputCol("ngrams")
 				.setOutputCol("tf");
@@ -214,7 +223,8 @@ public class NewsCredibilityMain {
 			assmeblerInput.add("hash_tags");
 			assmeblerInput.add("quotas");
 			assmeblerInput.add("question_marks");
-//			assmeblerInput.add(W2V_DB);
+			assmeblerInput.add(norm.getOutputCol());
+			assmeblerInput.add(W2V_DB);
 		
 		VectorAssembler assembler = new VectorAssembler()
 				  .setInputCols(assmeblerInput.toArray(new String[assmeblerInput.size()]))
@@ -223,7 +233,7 @@ public class NewsCredibilityMain {
 		LogisticRegression lr = new LogisticRegression();
 		
 //			ngramTransformer, hashingTF, idf,
-		PipelineStage[] pipelineStages = new PipelineStage[] { /*hashingTF, idf, word2Vec,*/  assembler, lr};
+		PipelineStage[] pipelineStages = new PipelineStage[] { /*hashingTF, idf, word2Vec,*/  featuresForNorm, norm, assembler, lr};
 		Pipeline pipeline = new Pipeline()
 				  .setStages(pipelineStages);
 		
@@ -237,8 +247,8 @@ public class NewsCredibilityMain {
 //				.addGrid(word2Vec.minCount(), new int[] {2, 3, 4})
 //				.addGrid(ngramTransformer.n(), new int[] {2, 3})
 //				.addGrid(hashingTF.numFeatures(), new int[] {1000, 2000})
-			.addGrid(lr.maxIter(), new int[] {1000})
-//		    .addGrid(lr.regParam(), new double[] {0.1, 0.001})
+			.addGrid(lr.maxIter(), new int[] {10})
+//		    .addGrid(lr.regParam(), new double[] {0.1, 0.001, 0.01, 0.00001})
 //		    .addGrid(lr.fitIntercept())
 //		    .addGrid(lr.elasticNetParam(), new double[] {0.2, 0.5, 0.8} )
 //			    .addGrid(idf.minDocFreq(), new int[]{2, 4})
@@ -318,7 +328,7 @@ public class NewsCredibilityMain {
 		
 		df = ngramTransformer.transform(df);
 		
-//		df = w2vModel.transform(df);
+		df = w2vModel.transform(df);
 		
 		//TODO: remove comment and test method.
 		df.registerTempTable("tmp");
@@ -327,8 +337,11 @@ public class NewsCredibilityMain {
 				+ "getOccurrences(content, '!')/getVectorLength("+tokenizerOutputCol+") as excl_marks, "
 				+ "getOccurrences(content, '#')/getVectorLength("+tokenizerOutputCol+") as hash_tags, "
 				+ "getOccurrences(content, '\"')/getVectorLength("+tokenizerOutputCol+") as quotas, "
-				+ "getOccurrences(content, '?')/getVectorLength("+tokenizerOutputCol+") as question_marks "
+				+ "getOccurrences(content, '?')/getVectorLength("+tokenizerOutputCol+") as question_marks, "
+				+ "getVectorLength("+tokenizerOutputCol+") as num_tokens\n"
 				+ "FROM tmp";
+		
+		
 		
 		df = sqlContxt.sql(sqlText);
 		
@@ -358,7 +371,7 @@ public class NewsCredibilityMain {
 			DataFrame validation = dataset.getValidationSet();
 			
 			DataFrame dbPediaw2v = Word2VecExtractor.getTrainingDataset(sqlContxt);
-//			w2vModel = Word2VecExtractor.trainw2v(dbPediaw2v, W2V_DB);
+			w2vModel = Word2VecExtractor.trainw2v(dbPediaw2v, W2V_DB);
 			
 			Transformer model = trainModel(sqlContxt, train, TOKENIZER_OUTPUT, false);
 

@@ -81,7 +81,7 @@ public class Word2VecExtractor {
 		Word2Vec word2Vec = new Word2Vec()
 		  .setInputCol("tokens")
 		  .setOutputCol(outputColumn)
-		  .setVectorSize(100)
+		  .setVectorSize(10)
 		  .setMinCount(3)
 		  .setNumPartitions(100)
 		  .setMaxIter(10);
