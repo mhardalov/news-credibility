@@ -82,7 +82,6 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double allUpperCaseCount = 0.0;
 				double firstUpperCase = 0.0;
 				double hasUrl = 0.0;
-				double hasHashTag = 0.0;
 				double firstPersonPronouns = 0.0;
 				double thirdPersonPronouns = 0.0;
 
@@ -103,10 +102,6 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 						hasUrl++;
 					}
 					
-					if (token.contains("#")) {
-						hasHashTag++;
-					}
-					
 					if (FIRST_PERSON.contains(token)) {
 						firstPersonPronouns++;
 					}
@@ -116,15 +111,14 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 					}
 				}
 				
-				double[] features = new double[8];
+				double[] features = new double[7];
 				features[0] = tokensCount;
 				features[1] = upperCaseCount/tokensCount;
 				features[2] = allUpperCaseCount/tokensCount;
 				features[3] = firstUpperCase/tokensCount;
 				features[4] = hasUrl/tokensCount;
-				features[5] = hasHashTag/tokensCount;
-				features[6] = firstPersonPronouns/tokensCount;
-				features[7] = thirdPersonPronouns/tokensCount;
+				features[5] = firstPersonPronouns/tokensCount;
+				features[6] = thirdPersonPronouns/tokensCount;
 
 				Vector vector = Vectors.dense(features);
 				return vector;

@@ -56,7 +56,7 @@ public class Word2VecExtractor {
 				"SELECT abstract as content\n"
 				+ "FROM dbpedia\n"
 				+ "WHERE abstract IS NOT NULL\n"
-				+ "LIMIT 50000";
+				+ "LIMIT 171444";
 		df = sqlContxt.sql(sqlText);
 		
 		return df;
@@ -82,7 +82,9 @@ public class Word2VecExtractor {
 		  .setInputCol("tokens")
 		  .setOutputCol(outputColumn)
 		  .setVectorSize(100)
-		  .setMinCount(3);
+		  .setMinCount(3)
+		  .setNumPartitions(100)
+		  .setMaxIter(10);
 		Word2VecModel model = word2Vec.fit(df);
 		
 		return model;

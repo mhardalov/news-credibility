@@ -9,6 +9,8 @@ import org.apache.spark.sql.types.DataTypes;
 
 import com.nenovinite.news.configuration.NewsConfiguration;
 
+import scala.collection.mutable.WrappedArray;
+
 public class DatasetLoader {
 	
 	private static final long SEED = 11l;
@@ -21,11 +23,11 @@ public class DatasetLoader {
 	
 	private void registerUDFs(final Random rand, SQLContext sqlContxt) {
 		sqlContxt.udf().register("generateId", (String s) -> rand.nextInt(1000000), DataTypes.IntegerType);
-		sqlContxt.udf().register("getFeatures", (String s) -> {
-			int size = s.length();
+		sqlContxt.udf().register("getVectorLength", (WrappedArray<String> tokens) -> {
+			Double size = (double) tokens.length();
 			
-			return size;
-		}, DataTypes.IntegerType);
+			return Math.max(Double.valueOf(1.0), size);
+		}, DataTypes.DoubleType);
 		
 		sqlContxt.udf().register("categoryToLabel", (String cat) -> {
 			return (cat.equals("Лайфстайл")) ? 0.0 : 1.0;

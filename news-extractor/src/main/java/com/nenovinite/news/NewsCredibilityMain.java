@@ -94,7 +94,7 @@ public class NewsCredibilityMain {
 	}
 
 	private static void evaluateModel(SQLContext sqlContxt, DataFrame df, Transformer model, String outputPath, String title) {
-		DataFrame predictions = predictForDF(df, model).select("prediction", "label").cache();
+		DataFrame predictions = predictForDF(sqlContxt, df, model).select("prediction", "label").cache();
 
 		// Select (prediction, true label) and compute test error
 		MulticlassClassificationEvaluator evaluator = new MulticlassClassificationEvaluator()
@@ -179,8 +179,8 @@ public class NewsCredibilityMain {
 	}
 
 
-	private static DataFrame predictForDF(DataFrame df, Transformer model) {
-		df = getCommonFeatures(df, TOKENIZER_OUTPUT);
+	private static DataFrame predictForDF(SQLContext sqlContxt, DataFrame df, Transformer model) {
+		df = getCommonFeatures(sqlContxt, df, TOKENIZER_OUTPUT);
 
 		// Make predictions on test documents. cvModel uses the best model found (lrModel).
 		DataFrame predictions = model.transform(df);
@@ -190,8 +190,8 @@ public class NewsCredibilityMain {
 	}
 
 
-	private static Transformer trainModel(DataFrame train, String tokenizerOutputCol, boolean useCV) {
-		train = getCommonFeatures(train, TOKENIZER_OUTPUT);
+	private static Transformer trainModel(SQLContext sqlContxt, DataFrame train, String tokenizerOutputCol, boolean useCV) {
+		train = getCommonFeatures(sqlContxt, train, TOKENIZER_OUTPUT);
 		
 		HashingTF hashingTF = new HashingTF()
 				.setInputCol("ngrams")
@@ -210,7 +210,11 @@ public class NewsCredibilityMain {
 //			assmeblerInput.add(idf.getOutputCol());
 //			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add("commonfeatures");
-			assmeblerInput.add(W2V_DB);
+			assmeblerInput.add("excl_marks");
+			assmeblerInput.add("hash_tags");
+			assmeblerInput.add("quotas");
+			assmeblerInput.add("question_marks");
+//			assmeblerInput.add(W2V_DB);
 		
 		VectorAssembler assembler = new VectorAssembler()
 				  .setInputCols(assmeblerInput.toArray(new String[assmeblerInput.size()]))
@@ -233,9 +237,10 @@ public class NewsCredibilityMain {
 //				.addGrid(word2Vec.minCount(), new int[] {2, 3, 4})
 //				.addGrid(ngramTransformer.n(), new int[] {2, 3})
 //				.addGrid(hashingTF.numFeatures(), new int[] {1000, 2000})
-			.addGrid(lr.maxIter(), new int[] {10})
+			.addGrid(lr.maxIter(), new int[] {1000})
 //		    .addGrid(lr.regParam(), new double[] {0.1, 0.001})
 //		    .addGrid(lr.fitIntercept())
+//		    .addGrid(lr.elasticNetParam(), new double[] {0.2, 0.5, 0.8} )
 //			    .addGrid(idf.minDocFreq(), new int[]{2, 4})
 		    .build();
 		
@@ -285,7 +290,7 @@ public class NewsCredibilityMain {
 	}
 
 
-	private static DataFrame getCommonFeatures(DataFrame df, String tokenizerOutputCol) {
+	private static DataFrame getCommonFeatures(SQLContext sqlContxt, DataFrame df, String tokenizerOutputCol) {
 		RegexTokenizer tokenizer = new RegexTokenizer()
 				  .setInputCol("content")
 				  .setOutputCol(tokenizerOutputCol)
@@ -313,10 +318,19 @@ public class NewsCredibilityMain {
 		
 		df = ngramTransformer.transform(df);
 		
-		df = w2vModel.transform(df);
+//		df = w2vModel.transform(df);
 		
 		//TODO: remove comment and test method.
-//		df = df.selectExpr("*, getOccurrences(content, '!') as excl_marks, ");
+		df.registerTempTable("tmp");
+		
+		String sqlText = "SELECT *, "
+				+ "getOccurrences(content, '!')/getVectorLength("+tokenizerOutputCol+") as excl_marks, "
+				+ "getOccurrences(content, '#')/getVectorLength("+tokenizerOutputCol+") as hash_tags, "
+				+ "getOccurrences(content, '\"')/getVectorLength("+tokenizerOutputCol+") as quotas, "
+				+ "getOccurrences(content, '?')/getVectorLength("+tokenizerOutputCol+") as question_marks "
+				+ "FROM tmp";
+		
+		df = sqlContxt.sql(sqlText);
 		
 		return df;
 	}
@@ -328,9 +342,9 @@ public class NewsCredibilityMain {
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
 			sqlContxt.udf().register("getOccurrences", (String content, String substring) -> {
-				int originalLen = content.length();
-				int leftOverLength = content.replace(substring, "").length();
-				int subStrLen = substring.length();
+				double originalLen = content.length();
+				double leftOverLength = content.replace(substring, "").length();
+				double subStrLen = substring.length();
 				
 				return (originalLen - leftOverLength) / subStrLen;
 			}, DataTypes.DoubleType);
@@ -344,9 +358,9 @@ public class NewsCredibilityMain {
 			DataFrame validation = dataset.getValidationSet();
 			
 			DataFrame dbPediaw2v = Word2VecExtractor.getTrainingDataset(sqlContxt);
-			w2vModel = Word2VecExtractor.trainw2v(dbPediaw2v, W2V_DB);
+//			w2vModel = Word2VecExtractor.trainw2v(dbPediaw2v, W2V_DB);
 			
-			Transformer model = trainModel(train, TOKENIZER_OUTPUT, false);
+			Transformer model = trainModel(sqlContxt, train, TOKENIZER_OUTPUT, false);
 
 			String outputPath = prepareFile(TSV_TEMPLATE, conf.getOutputFolder(), percents);
 			
