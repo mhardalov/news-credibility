@@ -20,6 +20,7 @@ public class DatasetLoader {
 	private final DataFrame train;
 	private final DataFrame test;
 	private final DataFrame validation;
+	private final DataFrame bazikiLeaks;
 	
 	private void registerUDFs(final Random rand, SQLContext sqlContxt) {
 		sqlContxt.udf().register("generateId", (String s) -> rand.nextInt(1000000), DataTypes.IntegerType);
@@ -32,6 +33,24 @@ public class DatasetLoader {
 		sqlContxt.udf().register("categoryToLabel", (String cat) -> {
 			return (cat.equals("Лайфстайл")) ? 0.0 : 1.0;
 		}, DataTypes.DoubleType);
+	}
+	
+	private DataFrame getBodyContent(SQLContext sqlContxt, String jsonPath, String bodyColumn,
+			String whereClause, String label) {
+		DataFrame df = sqlContxt.read().json(jsonPath);
+		df.registerTempTable("news");
+		df.printSchema();
+		
+		String sql = "SELECT\n"
+				   + "  generateId('') AS id,\n"
+				   + "	" + bodyColumn + " AS content,\n"
+				   + "	CAST(" + label + " AS Double) AS label\n"
+				   + "FROM news\n"
+				   + "WHERE (trim(nvl(" + bodyColumn + " , '')) != '')\n"
+				   + whereClause;
+		DataFrame newsData = sqlContxt.sql(sql);
+		
+		return newsData;
 	}
 
 	public DatasetLoader(SQLContext sqlContxt, double[] weights, NewsConfiguration conf) {
@@ -51,6 +70,9 @@ public class DatasetLoader {
 		this.validationData = this.getBodyContent(sqlContxt, conf.getValidationDataset(), "content",
 				"", "categoryToLabel(category)");
 		
+		this.bazikiLeaks = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
+				"", "0.0");
+		
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);
 		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), weights);
 		
@@ -68,29 +90,12 @@ public class DatasetLoader {
 		uTestingSplit.unpersist();
 		
 		this.validation = validationData.orderBy("content").repartition(10).cache();
+		this.bazikiLeaks.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
 		cTestingSplit.unpersist();
 	}
 	
 	private DataFrame[] getSplitsFromDF(DataFrame df, double[] weights) {
 		return df.randomSplit(weights, SEED);
-	}
-	
-	private DataFrame getBodyContent(SQLContext sqlContxt, String jsonPath, String bodyColumn,
-			String whereClause, String label) {
-		DataFrame df = sqlContxt.read().json(jsonPath);
-		df.registerTempTable("news");
-		df.printSchema();
-		
-		String sql = "SELECT\n"
-				   + "  generateId('') AS id,\n"
-				   + "	" + bodyColumn + " AS content,\n"
-				   + "	CAST(" + label + " AS Double) AS label\n"
-				   + "FROM news\n"
-				   + "WHERE (nvl(" + bodyColumn + " , '') != '')\n"
-				   + whereClause;
-		DataFrame newsData = sqlContxt.sql(sql);
-		
-		return newsData;
 	}
 	
 	public DataFrame getTrainingSet() {
@@ -111,5 +116,9 @@ public class DatasetLoader {
 
 	public DataFrame getUnreliableData() {
 		return unreliableData;
+	}
+
+	public DataFrame getBazikiLeaks() {
+		return bazikiLeaks;
 	}
 }

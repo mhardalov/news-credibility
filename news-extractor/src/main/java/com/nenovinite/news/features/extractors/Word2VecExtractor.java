@@ -66,9 +66,7 @@ public class Word2VecExtractor {
 		RegexTokenizer tokenizer = new RegexTokenizer()
 				  .setInputCol("content")
 				  .setOutputCol("tokens")
-				  .setPattern("[\\s!,.?;'\"]+")
-				  .setGaps(false);
-		
+				  .setPattern("\\w+").setGaps(false);
 		df = tokenizer.transform(df);
 		
 		NGram ngramTransformer = new NGram()
@@ -81,10 +79,10 @@ public class Word2VecExtractor {
 		Word2Vec word2Vec = new Word2Vec()
 		  .setInputCol("tokens")
 		  .setOutputCol(outputColumn)
-		  .setVectorSize(10)
+		  .setVectorSize(1)
 		  .setMinCount(3)
 		  .setNumPartitions(100)
-		  .setMaxIter(10);
+		  .setMaxIter(1);
 		Word2VecModel model = word2Vec.fit(df);
 		
 		return model;
