@@ -73,8 +73,6 @@ public class DatasetLoader {
 		this.validationData = this.getBodyContent(sqlContxt, conf.getValidationDataset(), "content",
 				"", "categoryToLabel(category)");
 		
-		this.bazikiLeaks = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
-				"", UNRELIABLE_LABEL);
 		
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);
 		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), weights);
@@ -86,15 +84,16 @@ public class DatasetLoader {
 		DataFrame cTestingSplit = credibleSplits[1].cache();
 
 		this.train = uTrainingSplit.unionAll(cTrainingSplit).orderBy("content").repartition(10).cache();
+		this.test = uTestingSplit.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+		this.validation = validationData.orderBy("content").repartition(10).cache();
+		this.bazikiLeaks = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
+				"", UNRELIABLE_LABEL).unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+		
 		uTrainingSplit.unpersist();
 		cTrainingSplit.unpersist();
-		
-		this.test = uTestingSplit.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+		cTestingSplit.unpersist();
 		uTestingSplit.unpersist();
 		
-		this.validation = validationData.orderBy("content").repartition(10).cache();
-		this.bazikiLeaks.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
-		cTestingSplit.unpersist();
 	}
 	
 	private DataFrame[] getSplitsFromDF(DataFrame df, double[] weights) {

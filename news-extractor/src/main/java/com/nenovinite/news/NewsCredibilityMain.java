@@ -173,8 +173,8 @@ public class NewsCredibilityMain {
 		List<String> assmeblerInput = new ArrayList<>();
 			assmeblerInput.add("commonfeatures");
 //			assmeblerInput.add(norm.getOutputCol());
-//			assmeblerInput.add(idf.getOutputCol());
-//			assmeblerInput.add(word2Vec.getOutputCol());
+			assmeblerInput.add(idf.getOutputCol());
+			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add(W2V_DB);
 		
 		VectorAssembler assembler = new VectorAssembler()
