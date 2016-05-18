@@ -14,6 +14,9 @@ import scala.collection.mutable.WrappedArray;
 public class DatasetLoader {
 	
 	private static final long SEED = 11l;
+	private static final String CREDIBLE_LABEL = "1.0";
+	private static final String UNRELIABLE_LABEL = "0.0";
+	
 	private final DataFrame credibleData;
 	private final DataFrame unreliableData;
 	private final DataFrame validationData;
@@ -31,7 +34,7 @@ public class DatasetLoader {
 		}, DataTypes.DoubleType);
 		
 		sqlContxt.udf().register("categoryToLabel", (String cat) -> {
-			return (cat.equals("Лайфстайл")) ? 0.0 : 1.0;
+			return (cat.equals("Лайфстайл")) ? Double.parseDouble(CREDIBLE_LABEL) : Double.parseDouble(UNRELIABLE_LABEL);
 		}, DataTypes.DoubleType);
 	}
 	
@@ -60,18 +63,18 @@ public class DatasetLoader {
 		this.unreliableData = this.getBodyContent(sqlContxt, conf.getUnreliableDataset(), "content",
 //				\nAND (category = \"Политика\")
 				"", 
-				"0.0");
+				UNRELIABLE_LABEL);
 		
 		this.credibleData = this.getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
 				"\nORDER BY DatePublished DESC\n"
 				+ "LIMIT 6061",
-				"1.0");
+				CREDIBLE_LABEL);
 		
 		this.validationData = this.getBodyContent(sqlContxt, conf.getValidationDataset(), "content",
 				"", "categoryToLabel(category)");
 		
 		this.bazikiLeaks = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
-				"", "0.0");
+				"", UNRELIABLE_LABEL);
 		
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);
 		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), weights);

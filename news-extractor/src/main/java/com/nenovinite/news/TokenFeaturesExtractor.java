@@ -153,7 +153,7 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double tokensCount = Math.max(1.0, (double) tokens.size());
 				
 				List<Double> features = new LinkedList<>();
-				features.add(tokensCount);
+//				features.add(tokensCount);
 				features.add(upperCaseCount/tokensCount);
 				features.add(allUpperCaseCount/tokensCount);
 				features.add(firstUpperCase/tokensCount);

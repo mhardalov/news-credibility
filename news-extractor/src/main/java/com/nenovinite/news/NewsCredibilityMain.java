@@ -74,9 +74,8 @@ public class NewsCredibilityMain {
 		RegexTokenizer tokenizer = new RegexTokenizer()
 				  .setInputCol("content")
 				  .setOutputCol(tokenizerOutputCol)
-//				  .setPattern("[\\s!,.?;'\"]+")
-				  .setPattern("\\w+")
-				  .setGaps(false);
+				  .setPattern("[\\s!,.?;'\"]+");
+//				  .setPattern("\\s+");
 		
 		df = tokenizer.transform(df);
 		
@@ -98,8 +97,6 @@ public class NewsCredibilityMain {
 				.setOutputCol("ngrams");
 		
 		df = ngramTransformer.transform(df);
-		
-		df = w2vModel.transform(df);
 		
 		return df;
 	}
@@ -174,9 +171,10 @@ public class NewsCredibilityMain {
 		  .setOutputCol("w2v");
 		
 		List<String> assmeblerInput = new ArrayList<>();
-			assmeblerInput.add(idf.getOutputCol());
-			assmeblerInput.add(word2Vec.getOutputCol());
-			assmeblerInput.add(norm.getOutputCol());
+			assmeblerInput.add("commonfeatures");
+//			assmeblerInput.add(norm.getOutputCol());
+//			assmeblerInput.add(idf.getOutputCol());
+//			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add(W2V_DB);
 		
 		VectorAssembler assembler = new VectorAssembler()
@@ -186,7 +184,7 @@ public class NewsCredibilityMain {
 		LogisticRegression lr = new LogisticRegression();
 		
 //			ngramTransformer, hashingTF, idf,
-		PipelineStage[] pipelineStages = new PipelineStage[] { hashingTF, idf, word2Vec,  featuresForNorm, norm, assembler, lr};
+		PipelineStage[] pipelineStages = new PipelineStage[] {  hashingTF, idf, word2Vec,  w2vModel, /*featuresForNorm, norm, */assembler, lr};
 		Pipeline pipeline = new Pipeline()
 				  .setStages(pipelineStages);
 		
@@ -303,7 +301,7 @@ public class NewsCredibilityMain {
 		}
 	}
 	
-	public static void main(String[] args) throws ParseException {
+	public static void main(String[] args) throws ParseException, IOException {
 		final NewsConfiguration conf = new NewsConfiguration(args);
 
 		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("News Classificator");

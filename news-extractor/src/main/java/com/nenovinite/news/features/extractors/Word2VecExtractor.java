@@ -1,5 +1,6 @@
 package com.nenovinite.news.features.extractors;
 
+import java.io.IOException;
 import java.util.Arrays;
 
 import org.apache.spark.SparkConf;
@@ -56,17 +57,18 @@ public class Word2VecExtractor {
 				"SELECT abstract as content\n"
 				+ "FROM dbpedia\n"
 				+ "WHERE abstract IS NOT NULL\n"
-				+ "LIMIT 171444";
-		df = sqlContxt.sql(sqlText);
+				+ "LIMIT 50000"; //171444
+		df = sqlContxt.sql(sqlText).repartition(10).cache();
 		
 		return df;
 	}
 	
-	public static Word2VecModel trainw2v(DataFrame df, String outputColumn) {
+	public static Word2VecModel trainw2v(DataFrame df, String outputColumn) throws IOException {
+		
 		RegexTokenizer tokenizer = new RegexTokenizer()
 				  .setInputCol("content")
 				  .setOutputCol("tokens")
-				  .setPattern("\\w+").setGaps(false);
+				  .setPattern("[\\s!,.?;'\"]+");
 		df = tokenizer.transform(df);
 		
 		NGram ngramTransformer = new NGram()
@@ -74,29 +76,35 @@ public class Word2VecExtractor {
 				.setOutputCol("ngrams");
 		
 		df = ngramTransformer.transform(df);
-
+		
 		// Learn a mapping from words to Vectors.
 		Word2Vec word2Vec = new Word2Vec()
 		  .setInputCol("tokens")
 		  .setOutputCol(outputColumn)
-		  .setVectorSize(1)
-		  .setMinCount(3)
-		  .setNumPartitions(100)
-		  .setMaxIter(1);
+		  .setVectorSize(50)
+		  .setMinCount(5)
+		  .setNumPartitions(10)
+		  .setMaxIter(10);
 		Word2VecModel model = word2Vec.fit(df);
 		
 		return model;
 	}
 	
 
-	public static void main(String[] args) {
-		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("Parser news");
+	public static void main(String[] args) throws IOException {
+		SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("Parser news")
+//				.set("spark.memory.offHeap.enabled", "true")
+//				.set("spark.memory.offHeap.size", "2g")
+				.set("spark.driver.extraJavaOptions", "-Xmx4096m -Xms256m");
+		
 		try (JavaSparkContext sc = new JavaSparkContext(sparkConf)) {
 			SQLContext sqlContxt = new SQLContext(sc);
 			DataFrame df = getTrainingDataset(sqlContxt);
 			df.show(50);
 
-			trainw2v(df, "w2v");
+			Word2VecModel model = trainw2v(df, "w2v");
+			
+			model.save("/home/momchil/Documents/MasterThesis/dataset/w2v/w2v.model");
 
 //			for (Tuple2<String, Object> word : fit.findSynonyms("3 май", 100)) {
 //				System.out.println(word);
