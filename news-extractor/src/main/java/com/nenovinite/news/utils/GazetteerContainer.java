@@ -29,19 +29,26 @@ public class GazetteerContainer {
 			"тогава", "този", "той", "толкова", "точно", "три", "трябва", "тук", "тъй", "тя", "тях", "у", "утре",
 			"харесва", "хиляди", "ч", "часа", "че", "често", "чрез", "ще", "щом", "юмрук", "я", "як", "zhelyo",
 			"не!новините", "\"дневник\"", "br2n" }));
-	public static final Set<String> FIRST_PERSON = new HashSet<>(
+
+	public static final Set<String> SINGULAR_PRONOUNS = new HashSet<>(
 			Arrays.asList("аз", "ти", "той", "тя", "то", "мене", "мен", "ме", "мене", "ми", "тебе", "теб", "те", "тебе",
 					"ти", "него", "нея", "него", "го", "я", "го", "нему", "ней", "нему", "му", "й", "му"));
-	public static final Set<String> THIRD_PERSON = new HashSet<>(Arrays.asList("ние", "ний", "вие", "вий", "те", "нас",
-			"ни", "нам", "ни", "вас", "ви", "вам", "ви", "тях", "ги", "тям", "им"));
-	
+	public static final Set<String> PLURAL_PRONOUNS = new HashSet<>(Arrays.asList("ние", "ний", "вие", "вий", "те",
+			"нас", "ни", "нам", "ни", "вас", "ви", "вам", "ви", "тях", "ги", "тям", "им"));
+	public static final Set<String> FIRST_PERSON = new HashSet<>(
+			Arrays.asList("аз", "мене", "мен", "ме", "мене", "ми", "ние", "ний", "нас", "ни", "нам", "ни"));
+	public static final Set<String> SECOND_PERSON = new HashSet<>(
+			Arrays.asList("ти", "тебе", "теб", "те", "тебе", "ти", "вие", "вий", "вас", "ви", "вам", "ви"));
+	public static final Set<String> THIRD_PERSON = new HashSet<>(Arrays.asList("тe", "тях", "ги", "тям", "им", "него",
+			"нея", "него", "го", "я", "го", "нему", "ней", "нему", "му", "й", "му", "той", "тя", "то"));
+
 	public static final CharArraySet BULGARIAN_STOP_WORDS_SET;
-	
+
 	static {
 		Set<String> stopWordsNew = new HashSet<>(STOP_WORDS);
-		stopWordsNew.removeAll(FIRST_PERSON);
-		stopWordsNew.removeAll(THIRD_PERSON);
-		
+		stopWordsNew.removeAll(SINGULAR_PRONOUNS);
+		stopWordsNew.removeAll(PLURAL_PRONOUNS);
+
 		final CharArraySet stopSet = new CharArraySet(stopWordsNew, true);
 		BULGARIAN_STOP_WORDS_SET = CharArraySet.unmodifiableSet(stopSet);
 	}

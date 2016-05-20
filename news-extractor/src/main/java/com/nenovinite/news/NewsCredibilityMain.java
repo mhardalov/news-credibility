@@ -58,7 +58,7 @@ public class NewsCredibilityMain {
 	private static Word2VecModel w2vModel;
 
 	private static String prepareFile(String template, String filePath, List<Double> percents) {
-		String fileName = "features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
+		String fileName = "fi:features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
 		template = String.format(template, filePath, fileName);
 		(new File(template)).delete();
 		return template;
@@ -70,7 +70,7 @@ public class NewsCredibilityMain {
 		return fMeasure;
 	}
 	
-	private static DataFrame getCommonFeatures(SQLContext sqlContxt, DataFrame df, String tokenizerOutputCol) {
+	public static DataFrame getCommonFeatures(SQLContext sqlContxt, DataFrame df, String tokenizerOutputCol) {
 		RegexTokenizer tokenizer = new RegexTokenizer()
 				  .setInputCol("content")
 				  .setOutputCol(tokenizerOutputCol)

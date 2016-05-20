@@ -43,7 +43,6 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 	private static final String ALL_UPPER_CASE = "^[А-ЯA-Z]+$";
 	private static final String FIRST_UPPER_CASE =  "^[А-ЯA-Z].*$";
 	private static final String LOWER_CASE = "^[а-яa-z]+$";
-	private static final String HAS_URL = "://";
 	
 	private String uid_ = Identifiable$.MODULE$.randomUID(this.getClass().toString().toLowerCase());
 
@@ -82,15 +81,17 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 
 			@Override
 			public Vector apply(String content) {
-				int featuresCount = 12;
+				int featuresCount = 10;
 				
 				double upperCaseCount = 0.0;
 				double allUpperCaseCount = 0.0;
 				double firstUpperCase = 0.0;
 				double lowerUpperCase = 0.0;
-				double hasUrl = 0.0;
 				double firstPersonPronouns = 0.0;
+				double secondPersonPronouns = 0.0;
 				double thirdPersonPronouns = 0.0;
+				double singularPronouns = 0.0;
+				double pluralPronouns = 0.0;
 				
 //				Multiset<String> tokens =
 //					    ConcurrentHashMultiset.create(new LinkedList<String>());
@@ -128,17 +129,25 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 								lowerUpperCase++;
 							}
 							
-							if (token.matches(HAS_URL)) {
-								hasUrl++;
-							}
-							
 							token = token.toLowerCase();
 							if (GazetteerContainer.FIRST_PERSON.contains(token)) {
 								firstPersonPronouns++;
 							}
 							
+							if (GazetteerContainer.SECOND_PERSON.contains(token)) {
+								secondPersonPronouns++;
+							}
+							
 							if (GazetteerContainer.THIRD_PERSON.contains(token)) {
 								thirdPersonPronouns++;
+							}
+							
+							if (GazetteerContainer.SINGULAR_PRONOUNS.contains(token)) {
+								singularPronouns++;
+							}
+							
+							if (GazetteerContainer.PLURAL_PRONOUNS.contains(token)) {
+								pluralPronouns++;
 							}
 							
 							tokens.add(token);
@@ -153,19 +162,22 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double tokensCount = Math.max(1.0, (double) tokens.size());
 				
 				List<Double> features = new LinkedList<>();
-//				features.add(tokensCount);
+				features.add(tokensCount);
 				features.add(upperCaseCount/tokensCount);
 				features.add(allUpperCaseCount/tokensCount);
 				features.add(firstUpperCase/tokensCount);
 				features.add(lowerUpperCase/tokensCount);
-				features.add(hasUrl/tokensCount);
 				features.add(firstPersonPronouns/tokensCount);
-				features.add(thirdPersonPronouns/tokensCount);
+				features.add(secondPersonPronouns/tokensCount);
+//				features.add(thirdPersonPronouns/tokensCount);
+//				features.add(singularPronouns/tokensCount);
+				features.add(pluralPronouns/tokensCount);
+//				features.add(this.countOccurences(content, "http")/tokensCount);
 				features.add(this.countOccurences(content, "!")/tokensCount);
-				features.add(this.countOccurences(content, "#")/tokensCount);
+//				features.add(this.countOccurences(content, "#")/tokensCount);
 				features.add(this.countOccurences(content, "\"")/tokensCount);
-				features.add(this.countOccurences(content, "'")/tokensCount);
-				features.add(this.countOccurences(content, "?")/tokensCount);
+//				features.add(this.countOccurences(content, "'")/tokensCount);
+//				features.add(this.countOccurences(content, "?")/tokensCount);
 				double[] primitiveFeatures = ArrayUtils.toPrimitive(features.toArray(new Double[features.size()]));
 
 				Vector vector = Vectors.dense(primitiveFeatures);
