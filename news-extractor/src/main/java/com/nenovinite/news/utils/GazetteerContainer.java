@@ -1,7 +1,16 @@
 package com.nenovinite.news.utils;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import java.util.Set;
 
 import org.apache.lucene.analysis.util.CharArraySet;
@@ -44,7 +53,32 @@ public class GazetteerContainer {
 
 	public static final CharArraySet BULGARIAN_STOP_WORDS_SET;
 
+	public static final Map<String, Double> POSITIVE_SENTIMENT;
+	public static final Map<String, Double> NEGATIVE_SENTIMENT;
+	
+	private static Map<String, Double> readSentimentFiles(String file) {
+		try {
+			return Files.lines(Paths.get(file), Charset.forName("UTF-8")).map(line -> {
+				String[] keyValue = line.split(",");
+				Entry<String, Double> entry = new SimpleEntry<>(keyValue[0], Double.parseDouble(keyValue[1]));
+
+				return entry;
+			}).collect(Collectors.toMap(Entry::getKey, Entry::getValue, (e1, e2) -> e1, HashMap::new));
+		} catch (NumberFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return new HashMap<>();
+	}
+	
 	static {
+		POSITIVE_SENTIMENT = readSentimentFiles("/home/momchil/Documents/MasterThesis/features/sentiment/positive.txt");
+		NEGATIVE_SENTIMENT = readSentimentFiles("/home/momchil/Documents/MasterThesis/features/sentiment/negative.txt");
+		
 		Set<String> stopWordsNew = new HashSet<>(STOP_WORDS);
 		stopWordsNew.removeAll(SINGULAR_PRONOUNS);
 		stopWordsNew.removeAll(PLURAL_PRONOUNS);

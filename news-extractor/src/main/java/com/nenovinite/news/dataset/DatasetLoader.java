@@ -67,7 +67,7 @@ public class DatasetLoader {
 		
 		this.credibleData = this.getBodyContent(sqlContxt, conf.getCredibleDataset(), "BodyText", 
 				"\nORDER BY DatePublished DESC\n"
-				+ "LIMIT 6061",
+				+ "LIMIT 7061",
 				CREDIBLE_LABEL);
 		
 		this.validationData = this.getBodyContent(sqlContxt, conf.getValidationDataset(), "content",
@@ -75,7 +75,7 @@ public class DatasetLoader {
 		
 		
 		DataFrame[] unreliableSplits = this.getSplitsFromDF(this.getUnreliableData(), weights);
-		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), weights);
+		DataFrame[] credibleSplits = this.getSplitsFromDF(this.getCredibleData(), new double[]{0.6, 0.3, 0.1});
 		
 		DataFrame uTrainingSplit = unreliableSplits[0].cache();
 		DataFrame cTrainingSplit = credibleSplits[0].cache();
@@ -87,7 +87,7 @@ public class DatasetLoader {
 		this.test = uTestingSplit.unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
 		this.validation = validationData.orderBy("content").repartition(10).cache();
 		this.bazikiLeaks = this.getBodyContent(sqlContxt, "/home/momchil/Documents/MasterThesis/dataset/bazikileaks-data-extended.json", "content",
-				"", UNRELIABLE_LABEL).unionAll(cTestingSplit).orderBy("content").repartition(10).cache();
+				"", UNRELIABLE_LABEL).unionAll(credibleSplits[2]).orderBy("content").repartition(10).cache();
 		
 		uTrainingSplit.unpersist();
 		cTrainingSplit.unpersist();

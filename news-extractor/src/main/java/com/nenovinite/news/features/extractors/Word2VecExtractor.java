@@ -71,20 +71,20 @@ public class Word2VecExtractor {
 				  .setPattern("[\\s!,.?;'\"]+");
 		df = tokenizer.transform(df);
 		
-		NGram ngramTransformer = new NGram()
-				.setInputCol("tokens")
-				.setOutputCol("ngrams");
-		
-		df = ngramTransformer.transform(df);
+//		NGram ngramTransformer = new NGram()
+//				.setInputCol("tokens")
+//				.setOutputCol("ngrams");
+//		
+//		df = ngramTransformer.transform(df);
 		
 		// Learn a mapping from words to Vectors.
 		Word2Vec word2Vec = new Word2Vec()
 		  .setInputCol("tokens")
 		  .setOutputCol(outputColumn)
-		  .setVectorSize(50)
-		  .setMinCount(5)
+//		  .setVectorSize(50)
+//		  .setMinCount(5)
 		  .setNumPartitions(10)
-		  .setMaxIter(10);
+		  .setMaxIter(4);
 		Word2VecModel model = word2Vec.fit(df);
 		
 		return model;

@@ -173,8 +173,8 @@ public class NewsCredibilityMain {
 		List<String> assmeblerInput = new ArrayList<>();
 			assmeblerInput.add("commonfeatures");
 //			assmeblerInput.add(norm.getOutputCol());
-			assmeblerInput.add(idf.getOutputCol());
-			assmeblerInput.add(word2Vec.getOutputCol());
+//			assmeblerInput.add(idf.getOutputCol());
+//			assmeblerInput.add(word2Vec.getOutputCol());
 			assmeblerInput.add(W2V_DB);
 		
 		VectorAssembler assembler = new VectorAssembler()
@@ -184,7 +184,7 @@ public class NewsCredibilityMain {
 		LogisticRegression lr = new LogisticRegression();
 		
 //			ngramTransformer, hashingTF, idf,
-		PipelineStage[] pipelineStages = new PipelineStage[] {  hashingTF, idf, word2Vec,  w2vModel, /*featuresForNorm, norm, */assembler, lr};
+		PipelineStage[] pipelineStages = new PipelineStage[] {  /*hashingTF, idf, word2Vec,  */ w2vModel, /*featuresForNorm, norm, */assembler, lr};
 		Pipeline pipeline = new Pipeline()
 				  .setStages(pipelineStages);
 		

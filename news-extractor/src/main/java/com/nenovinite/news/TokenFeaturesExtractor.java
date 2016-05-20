@@ -92,6 +92,8 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double thirdPersonPronouns = 0.0;
 				double singularPronouns = 0.0;
 				double pluralPronouns = 0.0;
+				double positiveWords = 0.0;
+				double negativeWords = 0.0;
 				
 //				Multiset<String> tokens =
 //					    ConcurrentHashMultiset.create(new LinkedList<String>());
@@ -150,6 +152,14 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 								pluralPronouns++;
 							}
 							
+							if (GazetteerContainer.POSITIVE_SENTIMENT.containsKey(token)) {
+								positiveWords++;
+							}
+							
+							if (GazetteerContainer.NEGATIVE_SENTIMENT.containsKey(token)) {
+								negativeWords++;
+							}
+							
 							tokens.add(token);
 						}
 					}
@@ -162,7 +172,7 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double tokensCount = Math.max(1.0, (double) tokens.size());
 				
 				List<Double> features = new LinkedList<>();
-				features.add(tokensCount);
+//				features.add(tokensCount);
 				features.add(upperCaseCount/tokensCount);
 				features.add(allUpperCaseCount/tokensCount);
 				features.add(firstUpperCase/tokensCount);
@@ -172,6 +182,8 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 //				features.add(thirdPersonPronouns/tokensCount);
 //				features.add(singularPronouns/tokensCount);
 				features.add(pluralPronouns/tokensCount);
+//				features.add(positiveWords/tokensCount);
+//				features.add(negativeWords/tokensCount);
 //				features.add(this.countOccurences(content, "http")/tokensCount);
 				features.add(this.countOccurences(content, "!")/tokensCount);
 //				features.add(this.countOccurences(content, "#")/tokensCount);
