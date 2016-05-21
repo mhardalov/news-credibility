@@ -51,7 +51,7 @@ public class NewsCredibilityMain {
 
 	
 	private static final String W2V_DB = "w2vDB";
-	private static final String TSV_TEMPLATE = "%s/lifestyle:ordered:%s.tsv";
+	private static final String TSV_TEMPLATE = "%s/fi:lifestyle:ordered:%s.tsv";
 	private static final String TOKENIZER_OUTPUT = "tokens";
 	
 	private static String stagesToString;
@@ -182,6 +182,8 @@ public class NewsCredibilityMain {
 				  .setOutputCol("features");
 		
 		LogisticRegression lr = new LogisticRegression();
+//				.setRegParam(0.03);
+//				.setElasticNetParam(0.3);
 		
 //			ngramTransformer, hashingTF, idf,
 		PipelineStage[] pipelineStages = new PipelineStage[] {  /*hashingTF, idf, word2Vec,  */ w2vModel, /*featuresForNorm, norm, */assembler, lr};
@@ -198,10 +200,10 @@ public class NewsCredibilityMain {
 //				.addGrid(word2Vec.minCount(), new int[] {2, 3, 4})
 //				.addGrid(ngramTransformer.n(), new int[] {2, 3})
 //				.addGrid(hashingTF.numFeatures(), new int[] {1000, 2000})
-			.addGrid(lr.maxIter(), new int[] {10})
-//		    .addGrid(lr.regParam(), new double[] {0.1, 0.001, 0.01, 0.00001})
+//			.addGrid(lr.maxIter(), new int[] {10, 100})
+//		    .addGrid(lr.regParam(), new double[] {0.0, 0.1, 0.4, 0.8, 1, 3, 5, 10})
 //		    .addGrid(lr.fitIntercept())
-//		    .addGrid(lr.elasticNetParam(), new double[] {0.2, 0.5, 0.8} )
+//		    .addGrid(lr.elasticNetParam(), new double[] {0.0, 0.2, 0.5, 0.8, 1.0} )
 //			    .addGrid(idf.minDocFreq(), new int[]{2, 4})
 		    .build();
 		

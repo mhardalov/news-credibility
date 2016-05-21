@@ -94,6 +94,8 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double pluralPronouns = 0.0;
 				double positiveWords = 0.0;
 				double negativeWords = 0.0;
+				double positiveWordsScore = 0.0;
+				double negativeWordsScore = 0.0;
 				
 //				Multiset<String> tokens =
 //					    ConcurrentHashMultiset.create(new LinkedList<String>());
@@ -154,10 +156,12 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 							
 							if (GazetteerContainer.POSITIVE_SENTIMENT.containsKey(token)) {
 								positiveWords++;
+								positiveWordsScore += GazetteerContainer.POSITIVE_SENTIMENT.get(token);
 							}
 							
 							if (GazetteerContainer.NEGATIVE_SENTIMENT.containsKey(token)) {
 								negativeWords++;
+								negativeWordsScore += GazetteerContainer.NEGATIVE_SENTIMENT.get(token);
 							}
 							
 							tokens.add(token);
@@ -170,24 +174,28 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				}
 				
 				double tokensCount = Math.max(1.0, (double) tokens.size());
+				double doubleQuotes = this.countOccurences(content, "\"")  + this.countOccurences(content, "“")  + this.countOccurences(content, "„");
 				
 				List<Double> features = new LinkedList<>();
+//				features.add(positiveWords/tokensCount);
+				features.add(negativeWords/tokensCount);
+//				features.add(positiveWordsScore);
+//				features.add(negativeWordsScore);
+				
 //				features.add(tokensCount);
 				features.add(upperCaseCount/tokensCount);
 				features.add(allUpperCaseCount/tokensCount);
 				features.add(firstUpperCase/tokensCount);
 				features.add(lowerUpperCase/tokensCount);
 				features.add(firstPersonPronouns/tokensCount);
-				features.add(secondPersonPronouns/tokensCount);
-//				features.add(thirdPersonPronouns/tokensCount);
+//				features.add(secondPersonPronouns/tokensCount);
+				features.add(thirdPersonPronouns/tokensCount);
 //				features.add(singularPronouns/tokensCount);
-				features.add(pluralPronouns/tokensCount);
-//				features.add(positiveWords/tokensCount);
-//				features.add(negativeWords/tokensCount);
+//				features.add(pluralPronouns/tokensCount);
 //				features.add(this.countOccurences(content, "http")/tokensCount);
 				features.add(this.countOccurences(content, "!")/tokensCount);
 //				features.add(this.countOccurences(content, "#")/tokensCount);
-				features.add(this.countOccurences(content, "\"")/tokensCount);
+				features.add(doubleQuotes/tokensCount);
 //				features.add(this.countOccurences(content, "'")/tokensCount);
 //				features.add(this.countOccurences(content, "?")/tokensCount);
 				double[] primitiveFeatures = ArrayUtils.toPrimitive(features.toArray(new Double[features.size()]));
