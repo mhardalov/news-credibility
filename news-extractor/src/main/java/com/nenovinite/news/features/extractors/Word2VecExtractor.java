@@ -57,8 +57,8 @@ public class Word2VecExtractor {
 				"SELECT abstract as content\n"
 				+ "FROM dbpedia\n"
 				+ "WHERE abstract IS NOT NULL\n"
-				+ "LIMIT 50000"; //171444
-		df = sqlContxt.sql(sqlText).repartition(10).cache();
+				+ "LIMIT 101444"; //171444
+		df = sqlContxt.sql(sqlText);
 		
 		return df;
 	}
@@ -81,12 +81,13 @@ public class Word2VecExtractor {
 		Word2Vec word2Vec = new Word2Vec()
 		  .setInputCol("tokens")
 		  .setOutputCol(outputColumn)
+		  .setVectorSize(100)
+//		  .setVectorSize(10)
 //		  .setVectorSize(50)
-//		  .setMinCount(5)
+		  .setMinCount(20)
 		  .setNumPartitions(10)
-		  .setMaxIter(4);
+		  .setMaxIter(10);
 		Word2VecModel model = word2Vec.fit(df);
-		
 		return model;
 	}
 	

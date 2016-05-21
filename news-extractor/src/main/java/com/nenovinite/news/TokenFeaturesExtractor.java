@@ -43,6 +43,7 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 	private static final String ALL_UPPER_CASE = "^[А-ЯA-Z]+$";
 	private static final String FIRST_UPPER_CASE =  "^[А-ЯA-Z].*$";
 	private static final String LOWER_CASE = "^[а-яa-z]+$";
+	private static final String NUMBER_REGEX = ".*[0-9]+.*";
 	
 	private String uid_ = Identifiable$.MODULE$.randomUID(this.getClass().toString().toLowerCase());
 
@@ -96,6 +97,8 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double negativeWords = 0.0;
 				double positiveWordsScore = 0.0;
 				double negativeWordsScore = 0.0;
+				double monthTokens = 0.0;
+				double numbersFound = 0.0;
 				
 //				Multiset<String> tokens =
 //					    ConcurrentHashMultiset.create(new LinkedList<String>());
@@ -133,6 +136,10 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 								lowerUpperCase++;
 							}
 							
+							if (token.matches(NUMBER_REGEX)) {
+								numbersFound++;
+							}
+							
 							token = token.toLowerCase();
 							if (GazetteerContainer.FIRST_PERSON.contains(token)) {
 								firstPersonPronouns++;
@@ -164,6 +171,10 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 								negativeWordsScore += GazetteerContainer.NEGATIVE_SENTIMENT.get(token);
 							}
 							
+							if (GazetteerContainer.MONTHS.contains(token)) {
+								monthTokens++;
+							}
+							
 							tokens.add(token);
 						}
 					}
@@ -177,25 +188,22 @@ public class TokenFeaturesExtractor extends Transformer implements HasInputCol, 
 				double doubleQuotes = this.countOccurences(content, "\"")  + this.countOccurences(content, "“")  + this.countOccurences(content, "„");
 				
 				List<Double> features = new LinkedList<>();
-//				features.add(positiveWords/tokensCount);
 				features.add(negativeWords/tokensCount);
-//				features.add(positiveWordsScore);
-//				features.add(negativeWordsScore);
-				
-//				features.add(tokensCount);
 				features.add(upperCaseCount/tokensCount);
 				features.add(allUpperCaseCount/tokensCount);
 				features.add(firstUpperCase/tokensCount);
 				features.add(lowerUpperCase/tokensCount);
 				features.add(firstPersonPronouns/tokensCount);
-//				features.add(secondPersonPronouns/tokensCount);
-				features.add(thirdPersonPronouns/tokensCount);
+				features.add(secondPersonPronouns/tokensCount);
+//				features.add(thirdPersonPronouns/tokensCount);
 //				features.add(singularPronouns/tokensCount);
-//				features.add(pluralPronouns/tokensCount);
+				features.add(pluralPronouns/tokensCount);
+//				features.add(positiveWords/tokensCount);
+//				features.add(negativeWords/tokensCount);
 //				features.add(this.countOccurences(content, "http")/tokensCount);
 				features.add(this.countOccurences(content, "!")/tokensCount);
 //				features.add(this.countOccurences(content, "#")/tokensCount);
-				features.add(doubleQuotes/tokensCount);
+				features.add(this.countOccurences(content, "\"")/tokensCount);
 //				features.add(this.countOccurences(content, "'")/tokensCount);
 //				features.add(this.countOccurences(content, "?")/tokensCount);
 				double[] primitiveFeatures = ArrayUtils.toPrimitive(features.toArray(new Double[features.size()]));

@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,6 +20,7 @@ import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.Transformer;
 import org.apache.spark.ml.classification.LogisticRegression;
+import org.apache.spark.ml.classification.MultilayerPerceptronClassifier;
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator;
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
 import org.apache.spark.ml.feature.HashingTF;
@@ -51,7 +53,7 @@ public class NewsCredibilityMain {
 
 	
 	private static final String W2V_DB = "w2vDB";
-	private static final String TSV_TEMPLATE = "%s/fi:lifestyle:ordered:%s.tsv";
+	private static final String TSV_TEMPLATE = "%s/fi:lifestyle:ordered:%s:%s.tsv";
 	private static final String TOKENIZER_OUTPUT = "tokens";
 	
 	private static String stagesToString;
@@ -59,7 +61,7 @@ public class NewsCredibilityMain {
 
 	private static String prepareFile(String template, String filePath, List<Double> percents) {
 		String fileName = "fi:features:" + stagesToString.replace("\t", "_") + "_splits:" + StringUtils.join(percents, "_");
-		template = String.format(template, filePath, fileName);
+		template = String.format(template, filePath, fileName, String.valueOf(Calendar.getInstance().getTimeInMillis()));
 		(new File(template)).delete();
 		return template;
 	}
@@ -182,11 +184,19 @@ public class NewsCredibilityMain {
 				  .setOutputCol("features");
 		
 		LogisticRegression lr = new LogisticRegression();
+		
+//		int[] layers = new int[] {108, 10, 10, 2};
+//		// create the trainer and set its parameters
+//		MultilayerPerceptronClassifier perceptron = new MultilayerPerceptronClassifier()
+//		  .setLayers(layers)
+//		  .setBlockSize(128)
+//		  .setSeed(1234L)
+//		  .setMaxIter(100);
 //				.setRegParam(0.03);
 //				.setElasticNetParam(0.3);
 		
 //			ngramTransformer, hashingTF, idf,
-		PipelineStage[] pipelineStages = new PipelineStage[] {  /*hashingTF, idf, word2Vec,  */ w2vModel, /*featuresForNorm, norm, */assembler, lr};
+		PipelineStage[] pipelineStages = new PipelineStage[] {  /*hashingTF, idf,  word2Vec,*/  w2vModel, /*featuresForNorm, norm, */assembler, lr};
 		Pipeline pipeline = new Pipeline()
 				  .setStages(pipelineStages);
 		
@@ -200,7 +210,7 @@ public class NewsCredibilityMain {
 //				.addGrid(word2Vec.minCount(), new int[] {2, 3, 4})
 //				.addGrid(ngramTransformer.n(), new int[] {2, 3})
 //				.addGrid(hashingTF.numFeatures(), new int[] {1000, 2000})
-//			.addGrid(lr.maxIter(), new int[] {10, 100})
+			.addGrid(lr.maxIter(), new int[] {10})
 //		    .addGrid(lr.regParam(), new double[] {0.0, 0.1, 0.4, 0.8, 1, 3, 5, 10})
 //		    .addGrid(lr.fitIntercept())
 //		    .addGrid(lr.elasticNetParam(), new double[] {0.0, 0.2, 0.5, 0.8, 1.0} )
